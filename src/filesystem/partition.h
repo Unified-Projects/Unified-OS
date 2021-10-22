@@ -30,13 +30,17 @@ private:
     //Basic Data Parition
     bool FLAG_READONLY_ = false; //Bit 60
     bool FLAG_HIDDEN_ = false; //Bit 62
-    bool FLAG_AUTOMOUNT_ = false; //Bit 63
+    bool FLAG_NOMOUNT_ = false; //Bit 63
 
     bool Mounted_ = false;
     uint8_t MountPoint_ = 0x00;
 
     //Root Dir Sector Start
     uint64_t RDSector_ = 0x00;
+
+    //FAT Sectors
+    uint64_t FAT1Sector_ = 0x00;
+    uint64_t FAT2Sector_ = 0x00;
 
 public:
     //File format
@@ -54,11 +58,15 @@ public:
     //Basic Data Parition
     const bool &FLAG_READONLY = FLAG_READONLY_; //Bit 60
     const bool &FLAG_HIDDEN = FLAG_HIDDEN_; //Bit 62
-    const bool &FLAG_AUTOMOUNT = FLAG_AUTOMOUNT_; //Bit 63
+    const bool &FLAG_NOMOUNT = FLAG_NOMOUNT_; //Bit 63
 
     const bool &Mounted = Mounted_;
     const uint8_t &MountPoint = MountPoint_;
 
     //Root Dir Sector Start
     const uint64_t &RDSector = RDSector_;
+
+    //FAT Sectors
+    const uint64_t &FAT1Sector = FAT1Sector_;
+    const uint64_t &FAT2Sector = FAT2Sector_;
 };

@@ -16,13 +16,13 @@ enum FILE_ATTRIBUTES_MASK{
 //Main attribute Struct
 struct FILE_ATTRIBUTE{
     //Bools
-    bool Read_Only;
-    bool Hidden;
-    bool System_File;
-    bool Volume_Label;
-    bool Long_File_Name;
-    bool Directory;
-    bool Archive;
+    bool Read_Only = false;
+    bool Hidden = false;
+    bool System_File = false;
+    bool Volume_Label = false;
+    bool Long_File_Name = false;
+    bool Directory = false;
+    bool Archive = false;
 
     //Setter
     void Set(uint8_t byte){
@@ -52,7 +52,7 @@ struct FILE_ATTRIBUTE{
 //Implement Long File Names Additional 32B entries contain the file's long filename (LFN)
 struct ROOT_DIRECTORY_ENTRY{
     uint8_t AllocationStatus; //Byte 0 //Status's (0x00 = unallocated) (0xe5 = deleted)
-    char FileName[11]; //Bytes 1 - 10 //If Not using allocation status (We will add First Char)
+    char* FileName; //Bytes 1 - 10 //If Not using allocation status (We will add First Char)
     FILE_ATTRIBUTE FileAttributes; //Byte 11
     uint8_t Reserved; //Byte 12
     uint8_t FileCreationTime; //Byte 13 //Tenth of seconds //Not Used By DOS
@@ -68,7 +68,7 @@ struct ROOT_DIRECTORY_ENTRY{
 
 struct LFN_DRIECTORY_ENTRY{
     uint8_t SequenceNumberAndAllocationStatus; //Byte 0 //Status's (0x00 = unallocated) (0xe5 = deleted)
-    char FileName[13]; //Bytes (1 - 10) (14 -25) (28 - 31)
+    char* FileName; //Bytes (1 - 10) (14 -25) (28 - 31)
     FILE_ATTRIBUTE FileAttributes; //Byte 11
     uint8_t Reserved; //Byte 12
     uint8_t Checksum; //Byte 13
@@ -96,7 +96,7 @@ struct DOT_ENTRY{
 struct DIRECTORY_ENTRY{
     ROOT_DIRECTORY_ENTRY RDE;
 
-    LFN_DRIECTORY_ENTRY LFNE[16];  //Last == First (They Stack, Its just how it is in the actual
+    LFN_DRIECTORY_ENTRY* LFNE;  //Last == First (They Stack, Its just how it is in the actual
     uint16_t LFNEntries = 0;                      // data of the drive the last is first so I need to flip)
 
     bool Valid = false;

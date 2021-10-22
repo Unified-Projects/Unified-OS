@@ -45,7 +45,7 @@ void Partition::Init(GPT_PARTITION_ENTRY* Entry){
 
         FLAG_READONLY_ = (GPTEntry->Attributes >> 60 == 1);
         FLAG_HIDDEN_ = (GPTEntry->Attributes >> 62 == 1);
-        FLAG_AUTOMOUNT_ = (GPTEntry->Attributes >> 63 == 1);
+        FLAG_NOMOUNT_ = (GPTEntry->Attributes >> 63 == 1);
         break;
 
     case LINUX_FILESYSTEM_DATA:
@@ -66,11 +66,17 @@ void Partition::Init(GPT_PARTITION_ENTRY* Entry){
     }
 
     //Mount Disk if can and AutoMount
-    if(FLAG_AUTOMOUNT && FLAG_HIDDEN && NextMountable < 0x5A){
+    if(!FLAG_NOMOUNT && !FLAG_HIDDEN && NextMountable < 0x5A){
         Mounted_ = true;
         MountPoint_ = NextMountable++;
     }
 
     //Calculate Root Director Start
-    RDSector_ = PartitionMBR->NumberOfSectorsBeforeStart + (2 * PartitionMBR->NumberOfSectorsPerFat) + PartitionMBR->SizeOfReservedSectors;
+    RDSector_ = PartitionMBR->NumberOfSectorsBeforeStart + (PartitionMBR->NumberOfFATs * PartitionMBR->NumberOfSectorsPerFat) + PartitionMBR->SizeOfReservedSectors;
+
+    //FAT Sectors
+    FAT1Sector_ = PartitionMBR->NumberOfSectorsBeforeStart + PartitionMBR->SizeOfReservedSectors;
+    if(PartitionMBR->NumberOfFATs == 2){
+        FAT2Sector_ = PartitionMBR->NumberOfSectorsBeforeStart + PartitionMBR->SizeOfReservedSectors + PartitionMBR->NumberOfSectorsPerFat;
+    }
 }

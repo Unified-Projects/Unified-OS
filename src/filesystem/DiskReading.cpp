@@ -8,6 +8,9 @@ ROOT_DIRECTORY_ENTRY GetRDE(void* buffer, uint64_t EntryOffset){
     //For Returning
     ROOT_DIRECTORY_ENTRY rde = ROOT_DIRECTORY_ENTRY{};
 
+    //Set FN
+    rde.FileName = new char[11];
+
     //Allocation Status
     rde.AllocationStatus = GetByte(buffer, EntryOffset);
 
@@ -62,6 +65,9 @@ ROOT_DIRECTORY_ENTRY GetRDE(void* buffer, uint64_t EntryOffset){
 LFN_DRIECTORY_ENTRY GetLFNDE(void* buffer, uint64_t EntryOffset){
     //To return
     LFN_DRIECTORY_ENTRY lfne = LFN_DRIECTORY_ENTRY{};
+
+    //Set FN
+    lfne.FileName = new char[13];
 
     //Character Indexing
     uint16_t charIndex = 0;
@@ -148,6 +154,18 @@ DIRECTORY_ENTRY RootGetDirectoryEntry(void* buffer, uint64_t EntryOffset){
 
     //First Check if LFN
     if(isLFN(buffer, EntryOffset)){
+        //
+        //
+        //
+        //
+        // HARD CODED SIZE ISSUE
+        //
+        //
+        //
+        //
+        //Setup LFN Entries
+        entry.LFNE = new LFN_DRIECTORY_ENTRY[16];
+
         //Offseting and indexing
         uint32_t CurrentLFNOffset = 0;
         uint8_t LFNIndex = 15;

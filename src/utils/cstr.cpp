@@ -182,3 +182,9 @@ bool strcmp(const char* val1, const char* val2, size_t size){
     
     return true;
 }
+
+int strlen(const char *str){
+    int n = 0;
+    for(const char* p = str; *p != '\0'; ++p, ++n);
+    return n + 1;
+}

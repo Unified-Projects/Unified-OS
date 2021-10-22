@@ -48,7 +48,7 @@ Directory::Directory(uint64_t FirstCluster, Drive* drive, Partition* partition){
             }
 
             //Read the Fat Sector of start
-            drive->port->Read(6302 + FatSectorIndex, 1, drive->port->buffer);
+            drive->port->Read(partition->FAT1Sector + FatSectorIndex, 1, drive->port->buffer);
 
             //Get the FAT entry data
             uint32_t FATEntryData = Flip4Byte(Get4Byte(drive->port->buffer, SectorIndex * 4)) & 0x0FFFFFFF;
@@ -72,7 +72,7 @@ Directory::Directory(uint64_t FirstCluster, Drive* drive, Partition* partition){
                 }
 
                 //Read the Fat Sector of start
-                drive->port->Read(6302 + FatSectorIndex, 1, drive->port->buffer);
+                drive->port->Read(partition->FAT1Sector + FatSectorIndex, 1, drive->port->buffer);
 
                 //Get the FAT entry data
                 FATEntryData = Flip4Byte(Get4Byte(drive->port->buffer, SectorIndex * 4)) & 0x0FFFFFFF;
@@ -105,13 +105,10 @@ Directory::Directory(uint64_t FirstCluster, Drive* drive, Partition* partition){
                     //Validate
                     if(ent.Valid){
                         //Apply Entry
-                        DirEntries[SizeOfEntries] = ent;
+                        DirEntries[SizeOfEntries++] = ent;
 
                         //Skip over LFN entries
                         offset += ent.LFNEntries * 32;
-
-                        //For Reference
-                        SizeOfEntries++;
                     }
 
                     //Move to next entry

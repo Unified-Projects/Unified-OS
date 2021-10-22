@@ -19,3 +19,6 @@ const char* to_string(double value);
 
 //Compare 2 Strings
 bool strcmp(const char* val1, const char* val2, size_t size);
+
+//Returns the lenght of a string
+int strlen(const char *str);

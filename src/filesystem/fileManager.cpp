@@ -2,81 +2,19 @@
 #include "ByteInteraction.h"
 #include "../memory/heap.h"
 #include "../Paging/PageFrameAllocator.h"
+#include "../scheduling/pit/pit.h"
 
 //Global FM
 FileManager GlobalFileManager;
 
-//Reads system entries
+//Initaliser
 void FileManager::Initialize(){
-    Drive* d = Drives[0];
-    Partition* p = &d->Partitions[0];
-
-    DIR::Directory TestDirectory(2, d, p);
-
-    //Print Directory Files
-    GlobalRenderer->PrintAtCursor("\n\n ---- Reading Root Directory ----\n\n");
-    GlobalRenderer->Next();
-
-    for(int i = 0; i < TestDirectory.SizeOfEntries; i++){
-        if(TestDirectory.DirEntries[i].RDE.FileAttributes.Directory){
-            GlobalRenderer->PrintAtCursor("Directory: ");
-            GlobalRenderer->PrintAtCursor(TestDirectory.DirEntries[i].RDE.FileName);
-            GlobalRenderer->Next();
-        }
-        else if(TestDirectory.DirEntries[i].RDE.FileAttributes.Volume_Label){
-            GlobalRenderer->PrintAtCursor("Volume Name: ");
-            GlobalRenderer->PrintAtCursor(TestDirectory.DirEntries[i].RDE.FileName);
-            GlobalRenderer->Next();
-        }
-        else if(TestDirectory.DirEntries[i].RDE.FileAttributes.Archive){
-            GlobalRenderer->PrintAtCursor("File: ");
-
-            FILE::File f(TestDirectory.DirEntries[i], d, p);
-            GlobalRenderer->PrintAtCursor(f.FileName);
-            GlobalRenderer->PrintAtCursor(".");
-            GlobalRenderer->PrintAtCursor(f.Extension);
-
-            GlobalRenderer->Next();
-        }
-    }
-
-    FILE::File test(TestDirectory.DirEntries[TestDirectory.SizeOfEntries - 1], d, p);
-
-    //Print Test Title
-    GlobalRenderer->PrintAtCursor("\n\n---- FILE TEST DATA READING ----\n\n");
     
-    //Print File Name
-    GlobalRenderer->PrintAtCursor("File Name: ");
-    GlobalRenderer->PrintAtCursor(test.FileName);
-    GlobalRenderer->PrintAtCursor(".");
-    GlobalRenderer->PrintAtCursor(test.Extension);
-    GlobalRenderer->Next();
-
-    //Print File Size
-    GlobalRenderer->PrintAtCursor("File Size: ");
-    GlobalRenderer->PrintAtCursor(to_string((uint64_t)test.FileSize));
-    GlobalRenderer->Next();
-
-    //First Data Sector
-    GlobalRenderer->PrintAtCursor("File Starting Sector: ");
-    GlobalRenderer->PrintAtCursor(to_string((uint64_t)((test.DirEntry.RDE.Low2BytesOfAddressOfFirstCluster - 2) * p->PartitionMBR->SectorsPerCluster) + p->RDSector));
-    GlobalRenderer->Next();
-    GlobalRenderer->Next();
-
-    //Test Reading Data
-    test.ReadData();
-
-    //Data
-    GlobalRenderer->PrintAtCursor("File Data: \n");
-    for(int i = 0; i < test.FileSize; i++){
-        GlobalRenderer->putChar(((char*)test.data)[i]);
-    }
-    GlobalRenderer->Next();
 }
 
 //Validates and entry
-bool ValidatePath(const char* path){
-    if(sizeof(path)/sizeof(*path) >= 8){
+bool ValidatePath(const char* path, size_t Size){
+    if(Size >= 8){
         if(path[0] < NextMountable && path[0] >= 0x41){
             if(path[1] == ':'){
                 if(path[2] == '\\' || path[2] == '/'){
@@ -88,27 +26,52 @@ bool ValidatePath(const char* path){
     return false;
 }
 
+//Check how many directories there are
+uint64_t CountLayers(const char* path, size_t Size){
+    uint64_t Layers = 0;
+
+    //Loop over characters
+    for(int i = 0; i < Size; i++){
+        if(path[i] == '\\' || path[i] == '/'){
+            Layers++;
+        }
+    }
+
+    return Layers - 1;
+}
+
 //Returns the file from a entry
 FILE::File FileManager::FindFile(const char* path){
-    //Create
-    FILE::File file(DIRECTORY_ENTRY{}, NULL, NULL);
+    //Create Empty
+    FILE::File file;
+
+    //Size of path
+    uint64_t Size = strlen(path);
 
     //Validate
-    if(!ValidatePath(path)) return file;
+    if(!ValidatePath(path, Size)) return file;
 
-    Partition* partiton;
+    //Location of Parititon
+    Partition* partition;
     Drive* drive;
     bool FoundPartition;
 
-    //Get the partition
+    //Look for patition in drives
     for (int d = 0; d < DriveCount; d++){
         drive = Drives[d];
 
+        //Loop over paritions
         for(int p = 0; p < drive->DriveGPT->EntryCount; p++){
+            
+            //Check if it is mounted
             if(drive->Partitions[p].Mounted){
+                
+                //If mounted check if is correct parititon
                 if(drive->Partitions[p].MountPoint == path[0]){
+                    
+                    //If correct fix references and exit loop
                     FoundPartition = true;
-                    partiton = &drive->Partitions[p];
+                    partition = &drive->Partitions[p];
                     break;
                 }
             }
@@ -116,6 +79,119 @@ FILE::File FileManager::FindFile(const char* path){
 
         if(FoundPartition)
             break;
+    }
+
+    //Count layers ("A:/foo/bar/...")
+    uint64_t Layers = CountLayers(path, Size);
+
+    //First Do Root
+    DIR::Directory LayerDir(2, drive, partition);
+
+    //Path Offset
+    uint64_t PathOffset = 3;
+
+    //Found Yet
+    bool Found = false;
+    FILE::File File;
+
+    //Layering
+    bool DirFound = false;
+
+    //Loop over directory Entries
+    for(int e = 0; e < LayerDir.SizeOfEntries; e++){
+        //Create a temporary File
+        FILE::File f(LayerDir.DirEntries[e]);
+
+        //Offsetting of the path
+        PathOffset = 3;
+
+        //Check if Main FileName is the same
+        if(strcmp(f.FileName, path + PathOffset, f.FileNameSize)){
+
+            //Apply offset to check extention
+            PathOffset+=f.FileNameSize + 1;
+
+            //Compare extentions
+            if(strcmp(f.Extention, path + PathOffset, f.ExtentionSize) || f.ExtentionSize == 0){
+                //Check if directory (Another Layer Needed)
+                if(!f.DirEntry.RDE.FileAttributes.Directory && Layers == 0){
+                    //Create File
+                    Found = true;
+                    File = FILE::File(LayerDir.DirEntries[e], drive, partition);
+
+                    //Return the file
+                    return File;
+                }
+                //Otherwise if it is a directory and Layered
+                else if(f.DirEntry.RDE.FileAttributes.Directory && Layers > 0){
+                    //Locate Dir
+                    DirFound = true;
+
+                    //Find Cluster of Dir
+                    uint32_t FATStartEntry = (((((uint32_t)f.DirEntry.RDE.High2BytesOfAddressOfFirstCluster) << 16) & 0xFFFF0000) |
+                                                       f.DirEntry.RDE.Low2BytesOfAddressOfFirstCluster);
+
+                    //Read dir
+                    LayerDir = DIR::Directory(FATStartEntry, drive, partition);
+
+                    break;
+                }
+            }
+        }
+    }
+
+    //Look over any other layers
+    for(int l = 0; l < Layers; l++){
+        //Stop Any Repetitions of Directories
+        if(DirFound){
+            DirFound = false;
+            
+            uint64_t BackupPathOffset = PathOffset;
+
+            //Loop over directory Entries
+            for(int e = 0; e < LayerDir.SizeOfEntries; e++){
+                if(DirFound) continue;
+
+                //Create a temporary File
+                FILE::File f(LayerDir.DirEntries[e]);
+
+                //Offsetting of the path
+                PathOffset = BackupPathOffset;
+
+                //Check if Main FileName is the same
+                if(strcmp(f.FileName, path + PathOffset, f.FileNameSize)){
+
+                    //Apply offset to check extention
+                    PathOffset+=f.FileNameSize + 1;
+
+                    //Compare extentions
+                    if(strcmp(f.Extention, path + PathOffset, f.ExtentionSize)){
+                        //Check if directory (Another Layer Needed)
+                        if(!f.DirEntry.RDE.FileAttributes.Directory && Layers - l == 1){
+
+                            //Create File
+                            Found = true;
+                            File = FILE::File(LayerDir.DirEntries[e], drive, partition);
+
+                            //Return the file
+                            return File;
+                        }
+                        //Otherwise if it is a directory and Layered
+                        else if(f.DirEntry.RDE.FileAttributes.Directory && Layers > l+1){
+                            //Locate Dir
+                            DirFound = true;
+
+                            //Find Cluster of Dir
+                            uint32_t FATStartEntry = (((((uint32_t)f.DirEntry.RDE.High2BytesOfAddressOfFirstCluster) << 16) & 0xFFFF0000) |
+                                                            f.DirEntry.RDE.Low2BytesOfAddressOfFirstCluster);
+
+                            //Read dir
+                            LayerDir = DIR::Directory(FATStartEntry, drive, partition);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     //Return

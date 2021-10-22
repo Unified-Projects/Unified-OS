@@ -32,7 +32,7 @@ namespace FILE{
         //File Info
         char* FileName;
         uint16_t FileNameSize = 0;
-        char* Extension;
+        char* Extention;
         uint8_t ExtentionSize = 0;
 
         //If a file and how much data to read
@@ -51,8 +51,9 @@ namespace FILE{
         void ReadData();
 
         //Find Data
-        File();
-        File(DIRECTORY_ENTRY entry, Drive* drive, Partition* partition);
+        File(); //NULL VALUE
+        File(DIRECTORY_ENTRY entry); //Will Not COMPLETE SETUP
+        File(DIRECTORY_ENTRY entry, Drive* drive, Partition* partition); //Setup
 
     private:
         //For data read/clear
@@ -73,7 +74,4 @@ namespace FILE{
         Drive* DrivePtr = NULL;
         Partition* PartitionPtr = NULL;
     };
-
-    //Main reader from a driectory entry
-    File readFileData(DIRECTORY_ENTRY dirEntry, AHCI::Port* FileDrive);
 }
