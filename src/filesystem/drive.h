@@ -34,13 +34,6 @@ public:
     Drive(AHCI::Port* portPtr);
 };  
 
-//For data storage
-struct DriveFS{
-    //Content Tracker
-    PartitionFS* partitions;
-    uint8_t PartitionSize = 0;
-};
-
 //Global Drives
 extern Drive* Drives[];
 extern uint8_t DriveCount;

@@ -2,7 +2,6 @@
 
 #include "../ahci/port.h"
 #include "DriveBaseSectors.h"
-#include "directory.h"
 
 enum PARTITION_FORMAT{
     NOT_PRESENT = -1,
@@ -62,17 +61,4 @@ public:
 
     //Root Dir Sector Start
     const uint64_t &RDSector = RDSector_;
-};
-
-//For FS
-struct PartitionFS{
-    //Content
-    DIR::Directory* directories;
-    uint64_t DirCount = 0;
-
-    //Referencing
-    uint8_t PartitionNumber;
-
-    //Hiding
-    bool Hidden = false;
 };

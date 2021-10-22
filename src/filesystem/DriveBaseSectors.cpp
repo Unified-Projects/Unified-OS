@@ -182,6 +182,8 @@ MBR* ReadMBR(void* Sector, MBR* Location){
     //Retrun Value
     //Location = new MBR{};
 
+    Location = new MBR{};
+
     //JumpCode/Op
     Location->JumpCodeAndNOP = Get4Byte(Sector, 0) >> 8;
 

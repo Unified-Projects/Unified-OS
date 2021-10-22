@@ -40,7 +40,7 @@ ROOT_DIRECTORY_ENTRY GetRDE(void* buffer, uint64_t EntryOffset){
     rde.AccessDate = Get2Byte(buffer, EntryOffset + 18);
 
     //High two bytes of cluster address
-    rde.High2BytesOfAddressOfFirstCluster = Get2Byte(buffer, EntryOffset + 20);
+    rde.High2BytesOfAddressOfFirstCluster = Flip2Byte(Get2Byte(buffer, EntryOffset + 20));
 
     //Modified Time hours minutes seconds
     rde.ModifiedTime = Get2Byte(buffer, EntryOffset + 22);
@@ -49,7 +49,7 @@ ROOT_DIRECTORY_ENTRY GetRDE(void* buffer, uint64_t EntryOffset){
     rde.ModifiedDate = Get2Byte(buffer, EntryOffset + 24);
 
     //Low Two Bytes of cluster
-    rde.Low2BytesOfAddressOfFirstCluster = GetByte(buffer, EntryOffset + 26);
+    rde.Low2BytesOfAddressOfFirstCluster = Flip2Byte(Get2Byte(buffer, EntryOffset + 26));
 
     //File Size (Flipped For Actual Value) (Will be zero if not file)
     rde.FileSize = Flip4Byte(Get4Byte(buffer, EntryOffset + 28));
@@ -134,7 +134,7 @@ bool ValidateEntry(void* buffer, uint64_t EntryOffset){
 }
 
 //Reads the buffer for the entry also getting the longer file names
-DIRECTORY_ENTRY RootGetDirectoryEntry(void* buffer, uint64_t EntryOffset, uint32_t rootStart){
+DIRECTORY_ENTRY RootGetDirectoryEntry(void* buffer, uint64_t EntryOffset){
     //Check if ValidEntry
     if(!ValidateEntry(buffer, EntryOffset)){
         return DIRECTORY_ENTRY{};
@@ -181,15 +181,6 @@ DIRECTORY_ENTRY RootGetDirectoryEntry(void* buffer, uint64_t EntryOffset, uint32
     else{
         //Read in the directory entry
         entry.RDE = GetRDE(buffer, EntryOffset);
-    }
-
-    if(entry.RDE.FileSize > 0){
-        //File Segment
-        uint32_t FClusterH = ((uint32_t)entry.RDE.High2BytesOfAddressOfFirstCluster) << 16;
-        uint32_t FClusterL = ((uint32_t)entry.RDE.Low2BytesOfAddressOfFirstCluster);
-        uint32_t FCluster = (FClusterH & 0xFFFF0000) | (FClusterL & 0x0000FFFF);
-
-        entry.FILE_FIRST_SEGMENT = FCluster + rootStart - 2;
     }
 
     //Return result

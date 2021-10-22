@@ -11,54 +11,67 @@ void FileManager::Initialize(){
     Drive* d = Drives[0];
     Partition* p = &d->Partitions[0];
 
-    d->port->Read(8321, 1, d->port->buffer);
+    DIR::Directory TestDirectory(2, d, p);
 
-    ROOT_DIRECTORY_ENTRY rde = GetRDE(d->port->buffer, 0x00);
-    uint32_t FATStartEntry = ((((uint32_t)rde.High2BytesOfAddressOfFirstCluster) << 16) & 0xFFFF0000) | rde.Low2BytesOfAddressOfFirstCluster;
-    FAT32Entry End;
+    //Print Directory Files
+    GlobalRenderer->PrintAtCursor("\n\n ---- Reading Root Directory ----\n\n");
+    GlobalRenderer->Next();
 
-    uint32_t entry = Flip4Byte(FATStartEntry);
-    //entry = 0x01000000;
-
-    uint64_t index = (Flip4Byte(entry) * 32) / 512 + 1;
-
-    d->port->Read(6301 + index, 1, d->port->buffer);
-
-    uint32_t pos = Flip4Byte(entry);
-
-    while (pos >= 16){
-        pos -= 16;
-    }
-
-    entry = Get4Byte(d->port->buffer, pos * 32);
-
-    uint64_t EntrySize = 0x01;
-
-    while((Flip4Byte(entry) & 0xFFFFFFF) != 0xFFFFFFF){
-        EntrySize++;
-
-        index = (Flip4Byte(entry) * 32) / 512 + 1;
-
-        d->port->Read(6301 + index, 1, d->port->buffer);
-
-        pos = Flip4Byte(entry);
-
-        while (pos >= 16){
-            pos -= 16;
+    for(int i = 0; i < TestDirectory.SizeOfEntries; i++){
+        if(TestDirectory.DirEntries[i].RDE.FileAttributes.Directory){
+            GlobalRenderer->PrintAtCursor("Directory: ");
+            GlobalRenderer->PrintAtCursor(TestDirectory.DirEntries[i].RDE.FileName);
+            GlobalRenderer->Next();
         }
+        else if(TestDirectory.DirEntries[i].RDE.FileAttributes.Volume_Label){
+            GlobalRenderer->PrintAtCursor("Volume Name: ");
+            GlobalRenderer->PrintAtCursor(TestDirectory.DirEntries[i].RDE.FileName);
+            GlobalRenderer->Next();
+        }
+        else if(TestDirectory.DirEntries[i].RDE.FileAttributes.Archive){
+            GlobalRenderer->PrintAtCursor("File: ");
 
-        GlobalRenderer->PrintAtCursor(to_string((uint64_t)pos));
-        GlobalRenderer->PrintAtCursor(" - ");
-        GlobalRenderer->PrintAtCursor(to_string((uint64_t)index));
-        GlobalRenderer->PrintAtCursor(" - ");
+            FILE::File f(TestDirectory.DirEntries[i], d, p);
+            GlobalRenderer->PrintAtCursor(f.FileName);
+            GlobalRenderer->PrintAtCursor(".");
+            GlobalRenderer->PrintAtCursor(f.Extension);
 
-        entry = Get4Byte(d->port->buffer, pos * 32);
-
-        GlobalRenderer->PrintAtCursor(to_hstring((uint32_t)entry));
-        GlobalRenderer->PrintAtCursor(" - ");
-        GlobalRenderer->PrintAtCursor(to_string((double)Flip4Byte(entry)));
-        GlobalRenderer->Next();
+            GlobalRenderer->Next();
+        }
     }
+
+    FILE::File test(TestDirectory.DirEntries[TestDirectory.SizeOfEntries - 1], d, p);
+
+    //Print Test Title
+    GlobalRenderer->PrintAtCursor("\n\n---- FILE TEST DATA READING ----\n\n");
+    
+    //Print File Name
+    GlobalRenderer->PrintAtCursor("File Name: ");
+    GlobalRenderer->PrintAtCursor(test.FileName);
+    GlobalRenderer->PrintAtCursor(".");
+    GlobalRenderer->PrintAtCursor(test.Extension);
+    GlobalRenderer->Next();
+
+    //Print File Size
+    GlobalRenderer->PrintAtCursor("File Size: ");
+    GlobalRenderer->PrintAtCursor(to_string((uint64_t)test.FileSize));
+    GlobalRenderer->Next();
+
+    //First Data Sector
+    GlobalRenderer->PrintAtCursor("File Starting Sector: ");
+    GlobalRenderer->PrintAtCursor(to_string((uint64_t)((test.DirEntry.RDE.Low2BytesOfAddressOfFirstCluster - 2) * p->PartitionMBR->SectorsPerCluster) + p->RDSector));
+    GlobalRenderer->Next();
+    GlobalRenderer->Next();
+
+    //Test Reading Data
+    test.ReadData();
+
+    //Data
+    GlobalRenderer->PrintAtCursor("File Data: \n");
+    for(int i = 0; i < test.FileSize; i++){
+        GlobalRenderer->putChar(((char*)test.data)[i]);
+    }
+    GlobalRenderer->Next();
 }
 
 //Validates and entry
@@ -78,7 +91,7 @@ bool ValidatePath(const char* path){
 //Returns the file from a entry
 FILE::File FileManager::FindFile(const char* path){
     //Create
-    FILE::File file;
+    FILE::File file(DIRECTORY_ENTRY{}, NULL, NULL);
 
     //Validate
     if(!ValidatePath(path)) return file;

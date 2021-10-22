@@ -15,10 +15,6 @@ public:
     void Initialize();
 
     FILE::File FindFile(const char* path);
-
-//Read but not write
-protected:
-    DriveFS* MountedDrives;
 };
 
 //Globaliser
