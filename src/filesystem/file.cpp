@@ -92,7 +92,7 @@ namespace FILE{
                 drive->port->Read(partition->FAT1Sector + FatSectorIndex, 1, drive->port->buffer);
 
                 //Get the FAT entry data
-                uint32_t FATEntryData = Flip4Byte(Get4Byte(drive->port->buffer, SectorIndex * 4)) & 0x0FFFFFFF;
+                uint32_t FATEntryData = LittleEndian(Get4Byte(drive->port->buffer, SectorIndex * 4)) & 0x0FFFFFFF;
 
                 //Current Entry
                 uint32_t EntryIndex = 0;
@@ -119,7 +119,7 @@ namespace FILE{
                     drive->port->Read(partition->FAT1Sector + FatSectorIndex, 1, drive->port->buffer);
 
                     //Get the FAT entry data
-                    FATEntryData = Flip4Byte(Get4Byte(drive->port->buffer, SectorIndex * 4)) & 0x0FFFFFFF;
+                    FATEntryData = LittleEndian(Get4Byte(drive->port->buffer, SectorIndex * 4)) & 0x0FFFFFFF;
                 }
                 
                 //Rest of file info
@@ -299,5 +299,9 @@ namespace FILE{
                 }
             }
         }
+    }
+
+    File::~File(){
+        FreeData();
     }
 }

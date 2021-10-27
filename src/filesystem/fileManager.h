@@ -5,6 +5,8 @@
 #include "DiskReading.h"
 #include "../ahci/port.h"
 
+#include "../filetypes/filetypes.h"
+
 class FileManager{
 private:
     //Stops reinitialization

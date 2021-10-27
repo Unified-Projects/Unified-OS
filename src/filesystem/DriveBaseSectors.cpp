@@ -168,10 +168,10 @@ MBR_PARTITION_ENTRY ReadMBRPartition(void* Buffer, uint16_t Offset){
     PEntry.EndOfParitionCylinderSector = Get2Byte(Buffer, Offset + 0x06);
 
     //Sectors between MBR and Storage Sector
-    PEntry.NumberOfSectorsBetweenTheMBRAndFirstSector = Flip4Byte(Get4Byte(Buffer, Offset + 0x08));
+    PEntry.NumberOfSectorsBetweenTheMBRAndFirstSector = LittleEndian(Get4Byte(Buffer, Offset + 0x08));
 
     //Sector Count
-    PEntry.NumberOfSectors = Flip4Byte(Get4Byte(Buffer, Offset + 0x0C));
+    PEntry.NumberOfSectors = LittleEndian(Get4Byte(Buffer, Offset + 0x0C));
     
     //Return Value
     return PEntry;
@@ -193,28 +193,28 @@ MBR* ReadMBR(void* Sector, MBR* Location){
     }
 
     //BPS
-    Location->BytesPerSector = Flip2Byte(Get2Byte(Sector, 0x0B));
+    Location->BytesPerSector = LittleEndian(Get2Byte(Sector, 0x0B));
 
     //Sectors Per Cluster
     Location->SectorsPerCluster = GetByte(Sector, 0x0D);
 
     //Number of Reserved Sectors (Before The First FAT)
-    Location->SizeOfReservedSectors = Flip2Byte(Get2Byte(Sector, 0x0E));
+    Location->SizeOfReservedSectors = LittleEndian(Get2Byte(Sector, 0x0E));
 
     //How many FATS (usually 2)
     Location->NumberOfFATs = GetByte(Sector, 0x10);
 
     //Root directory Size FAT12/FAT16 only
-    Location->MaxNumberFilesInRootDir = Flip2Byte(Get2Byte(Sector, 0x11));
+    Location->MaxNumberFilesInRootDir = LittleEndian(Get2Byte(Sector, 0x11));
     
     //Sectors in a partition (Not for FAT32)
-    Location->NumberOfSectorsInPartitionNFAT32 = Flip2Byte(Get2Byte(Sector, 0x13));
+    Location->NumberOfSectorsInPartitionNFAT32 = LittleEndian(Get2Byte(Sector, 0x13));
     
     //Type of Disk
     Location->MediaType = GetByte(Sector, 0x15); //0xf0 is removable, 0xf8 is hard disk
     
     //Size of FAT's FAT12/FAT16 only
-    Location->SizeOfFATInSectors = Flip2Byte(Get2Byte(Sector, 0x16));
+    Location->SizeOfFATInSectors = LittleEndian(Get2Byte(Sector, 0x16));
     
     //SPT
     Location->SectorsPerTrack = Get2Byte(Sector, 0x18);
@@ -223,13 +223,13 @@ MBR* ReadMBR(void* Sector, MBR* Location){
     Location->NumberOfHeads = Get2Byte(Sector, 0x1A);
     
     //Sectors before first data sector
-    Location->NumberOfSectorsBeforeStart = Flip4Byte(Get4Byte(Sector, 0x1C));
+    Location->NumberOfSectorsBeforeStart = LittleEndian(Get4Byte(Sector, 0x1C));
     
     //Total Number Of Sectors in Partition
-    Location->NumberOfSectorsInPartition = Flip4Byte(Get4Byte(Sector, 0x20));
+    Location->NumberOfSectorsInPartition = LittleEndian(Get4Byte(Sector, 0x20));
     
     //Number of sectors in a File Allocation Table
-    Location->NumberOfSectorsPerFat = Flip4Byte(Get4Byte(Sector, 0x24));
+    Location->NumberOfSectorsPerFat = LittleEndian(Get4Byte(Sector, 0x24));
     
     //Flags
     //(Bits 0-4 Indicate FAT Copy) 
@@ -242,13 +242,13 @@ MBR* ReadMBR(void* Sector, MBR* Location){
     Location->FATVersion = Get2Byte(Sector, 0x2A);
     
     //Cluster Number of the Root Directory
-    Location->ClusterNumberOfRootDirStart = Flip4Byte(Get4Byte(Sector, 0x2C));
+    Location->ClusterNumberOfRootDirStart = LittleEndian(Get4Byte(Sector, 0x2C));
     
     //FileSystem Information Sector
-    Location->SectorNumberOfFileSystemInformationSector = Flip2Byte(Get2Byte(Sector, 0x30));
+    Location->SectorNumberOfFileSystemInformationSector = LittleEndian(Get2Byte(Sector, 0x30));
     
     //BackupBootSector
-    Location->SectorNumberOfBackupBootSector = Flip2Byte(Get2Byte(Sector, 0x32));
+    Location->SectorNumberOfBackupBootSector = LittleEndian(Get2Byte(Sector, 0x32));
     
     //Bytes 0x34 - 0x3F Reserved
     
@@ -291,13 +291,13 @@ GUID ReadGUID(void* buffer, uint64_t offset){
     GUID guid = GUID{};
 
     //First Section
-    guid.Entry1 = Flip4Byte(Get4Byte(buffer, offset));
+    guid.Entry1 = LittleEndian(Get4Byte(buffer, offset));
 
     //Second
-    guid.Entry2 = Flip2Byte(Get2Byte(buffer, offset + 0x04));
+    guid.Entry2 = LittleEndian(Get2Byte(buffer, offset + 0x04));
 
     //Third
-    guid.Entry3 = Flip2Byte(Get2Byte(buffer, offset + 0x06));
+    guid.Entry3 = LittleEndian(Get2Byte(buffer, offset + 0x06));
 
     //Fourth
     guid.Entry4 = Get2Byte(buffer, offset + 0x08);
@@ -321,40 +321,40 @@ GPT* ReadGPT(void* Sector, GPT* Location){
     }
 
     //Revision Number
-    Location->Revision = Flip4Byte(Get4Byte(Sector, 0x08));
+    Location->Revision = LittleEndian(Get4Byte(Sector, 0x08));
 
     //Header Size
-    Location->HeaderSize = Flip4Byte(Get4Byte(Sector, 0x0C));
+    Location->HeaderSize = LittleEndian(Get4Byte(Sector, 0x0C));
 
     //Checksum
     Location->CRC32Checksum = Get4Byte(Sector, 0x10);
 
     //Header Block (1)
-    Location->LBAOfHeader = Flip8Byte(Get8Byte(Sector, 0x18));
+    Location->LBAOfHeader = LittleEndian(Get8Byte(Sector, 0x18));
 
     //Copy (End of Disk)
-    Location->LBAOfAlternateHeader = Flip8Byte(Get8Byte(Sector, 0x20));
+    Location->LBAOfAlternateHeader = LittleEndian(Get8Byte(Sector, 0x20));
 
     //First Data Block
-    Location->FirstUsableBlock = Flip8Byte(Get8Byte(Sector, 0x28));
+    Location->FirstUsableBlock = LittleEndian(Get8Byte(Sector, 0x28));
 
     //Last Data Block
-    Location->LastUsableBlock = Flip8Byte(Get8Byte(Sector, 0x30));
+    Location->LastUsableBlock = LittleEndian(Get8Byte(Sector, 0x30));
 
     //GUID
     Location->GUIDMain = ReadGUID(Sector, 0x38);
 
     //Starting LBA (Normally 2)
-    Location->StartingLBAofGUIDPartitionEntries = Flip8Byte(Get8Byte(Sector, 0x48));
+    Location->StartingLBAofGUIDPartitionEntries = LittleEndian(Get8Byte(Sector, 0x48));
 
     //Partition Max Entries (128)
-    Location->NumberOfPartitionEntries = Flip4Byte(Get4Byte(Sector, 0x50));
+    Location->NumberOfPartitionEntries = LittleEndian(Get4Byte(Sector, 0x50));
 
     //Size of an Entry (128) (Must Be a value of 128*2^n)
-    Location->SizeOfParitionEntries = Flip4Byte(Get4Byte(Sector, 0x54));
+    Location->SizeOfParitionEntries = LittleEndian(Get4Byte(Sector, 0x54));
 
     //CRC32 Of Entry
-    Location->CRC32OfParitionEntry = Flip4Byte(Get4Byte(Sector, 0x58));
+    Location->CRC32OfParitionEntry = LittleEndian(Get4Byte(Sector, 0x58));
 
     //Return Value
     return Location;
@@ -390,10 +390,10 @@ GPT* ReadGPTParitions(AHCI::Port* port, GPT* Location){
                 Location->Entries[s*4 + e].PartitionGUID = ReadGUID(port->buffer, offset + 0x10);
 
                 //First Block
-                Location->Entries[s*4 + e].StartingLBA = Flip8Byte(Get8Byte(port->buffer, offset + 0x20));
+                Location->Entries[s*4 + e].StartingLBA = LittleEndian(Get8Byte(port->buffer, offset + 0x20));
 
                 //Last Block
-                Location->Entries[s*4 + e].EndingLBA = Flip8Byte(Get8Byte(port->buffer, offset + 0x28));
+                Location->Entries[s*4 + e].EndingLBA = LittleEndian(Get8Byte(port->buffer, offset + 0x28));
 
                 //Any Attributes
                 Location->Entries[s*4 + e].Attributes = Get8Byte(port->buffer, offset + 0x30);

@@ -81,36 +81,43 @@ void InitializeHeap(void* heapAddress, size_t pageCount){
     LastHdr = startSeg;
 }
 
+
+#include "../screen/rendering/BasicRenderer.h"
+#include "../utils/cstr.h"
+
 //Allocate memory from heap
 void* malloc(size_t size){
-    if(size % 0x10 > 0) { //not a multiple of 0x10
+    //Make sure a valid size
+    if (size % 0x10 > 0){ // it is not a multiple of 0x10
         size -= (size % 0x10);
         size += 0x10;
     }
+    
+    //End
+    if (size == 0) return NULL;
 
-    //If Not a valid size
-    if(size <= 0) return NULL;
-
-    //Load over segments sorting heap
-    HeapSegHdr* currentSeg = (HeapSegHdr*)heapStart;
+    //Create Segments
+    HeapSegHdr* CurrentSegment = (HeapSegHdr*) heapStart;
     while(true){
-        if(currentSeg->free){
-            if(currentSeg->length > size){
-                currentSeg->Split(size);
-                currentSeg->free = false;
-                return (void*)((uint64_t)currentSeg + sizeof(HeapSegHdr));
+        if(CurrentSegment->free){
+            if (CurrentSegment->length > size){
+                CurrentSegment->Split(size);
+                CurrentSegment->free = false;
+                return (void*)((uint64_t)CurrentSegment + sizeof(HeapSegHdr));
             }
-            if(currentSeg->length == size){
-                currentSeg->free = false;
-                return (void*)((uint64_t)currentSeg + sizeof(HeapSegHdr));
+            if (CurrentSegment->length == size){
+                CurrentSegment->free = false;
+                return (void*)((uint64_t)CurrentSegment + sizeof(HeapSegHdr));
             }
         }
-        if(currentSeg->next == NULL) break;
-        currentSeg = currentSeg->next;
+        if (CurrentSegment->next == NULL) break;
+        CurrentSegment = CurrentSegment->next;
     }
 
-    //Increase size of heap
+    //Add more memort to heap
     ExpandHeap(size);
+
+    //Continue until size is empty
     return malloc(size);
 }
 
@@ -124,7 +131,7 @@ void free(void* address){
 
 //Add more memory to heap
 void ExpandHeap(size_t length){
-    //Ensure pages big
+    //Ensure pages fit 4MB
     if (length % 0x1000) {
         length -= length % 0x1000;
         length += 0x1000;
@@ -132,6 +139,7 @@ void ExpandHeap(size_t length){
 
     //Get pages count
     size_t pageCount = length / 0x1000;
+
     //Make a new segment
     HeapSegHdr* newSegment = (HeapSegHdr*)heapEnd;
 

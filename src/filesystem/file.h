@@ -55,6 +55,9 @@ namespace FILE{
         File(DIRECTORY_ENTRY entry); //Will Not COMPLETE SETUP
         File(DIRECTORY_ENTRY entry, Drive* drive, Partition* partition); //Setup
 
+        //Deconstructor
+        ~File();
+
     private:
         //For data read/clear
         uint64_t bufferPageCount = 0;

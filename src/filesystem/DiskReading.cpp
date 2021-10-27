@@ -43,7 +43,7 @@ ROOT_DIRECTORY_ENTRY GetRDE(void* buffer, uint64_t EntryOffset){
     rde.AccessDate = Get2Byte(buffer, EntryOffset + 18);
 
     //High two bytes of cluster address
-    rde.High2BytesOfAddressOfFirstCluster = Flip2Byte(Get2Byte(buffer, EntryOffset + 20));
+    rde.High2BytesOfAddressOfFirstCluster = LittleEndian(Get2Byte(buffer, EntryOffset + 20));
 
     //Modified Time hours minutes seconds
     rde.ModifiedTime = Get2Byte(buffer, EntryOffset + 22);
@@ -52,10 +52,10 @@ ROOT_DIRECTORY_ENTRY GetRDE(void* buffer, uint64_t EntryOffset){
     rde.ModifiedDate = Get2Byte(buffer, EntryOffset + 24);
 
     //Low Two Bytes of cluster
-    rde.Low2BytesOfAddressOfFirstCluster = Flip2Byte(Get2Byte(buffer, EntryOffset + 26));
+    rde.Low2BytesOfAddressOfFirstCluster = LittleEndian(Get2Byte(buffer, EntryOffset + 26));
 
     //File Size (Flipped For Actual Value) (Will be zero if not file)
-    rde.FileSize = Flip4Byte(Get4Byte(buffer, EntryOffset + 28));
+    rde.FileSize = LittleEndian(Get4Byte(buffer, EntryOffset + 28));
 
     //Returns
     return rde;

@@ -51,7 +51,7 @@ Directory::Directory(uint64_t FirstCluster, Drive* drive, Partition* partition){
             drive->port->Read(partition->FAT1Sector + FatSectorIndex, 1, drive->port->buffer);
 
             //Get the FAT entry data
-            uint32_t FATEntryData = Flip4Byte(Get4Byte(drive->port->buffer, SectorIndex * 4)) & 0x0FFFFFFF;
+            uint32_t FATEntryData = LittleEndian(Get4Byte(drive->port->buffer, SectorIndex * 4)) & 0x0FFFFFFF;
             
             //Set First Entry
             F32Entry.Clusters[Entries++] = FATStartEntry;
@@ -75,7 +75,7 @@ Directory::Directory(uint64_t FirstCluster, Drive* drive, Partition* partition){
                 drive->port->Read(partition->FAT1Sector + FatSectorIndex, 1, drive->port->buffer);
 
                 //Get the FAT entry data
-                FATEntryData = Flip4Byte(Get4Byte(drive->port->buffer, SectorIndex * 4)) & 0x0FFFFFFF;
+                FATEntryData = LittleEndian(Get4Byte(drive->port->buffer, SectorIndex * 4)) & 0x0FFFFFFF;
             }
 
             //

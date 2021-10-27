@@ -33,7 +33,7 @@ uint64_t Get8Byte(void* Buffer, uint64_t start){
 
 //Simple when reading from disk
 //With some numbers we want to swap the two bytes
-uint16_t Flip2Byte(uint16_t toFlip){
+uint16_t LittleEndian(uint16_t toFlip){
     uint16_t B1 = (toFlip & 0x00FF) << 8;
     uint16_t B2 = (toFlip & 0xFF00) >> 8;
     
@@ -41,7 +41,7 @@ uint16_t Flip2Byte(uint16_t toFlip){
 }
 
 //Or Four
-uint32_t Flip4Byte(uint32_t toFlip){
+uint32_t LittleEndian(uint32_t toFlip){
     uint32_t B1 = (toFlip & 0x000000FF) << 24;
     uint32_t B2 = (toFlip & 0x0000FF00) << 8;
     uint32_t B3 = (toFlip & 0x00FF0000) >> 8;
@@ -51,7 +51,7 @@ uint32_t Flip4Byte(uint32_t toFlip){
 }
 
 //Or Eight
-uint64_t Flip8Byte(uint64_t toFlip){
+uint64_t LittleEndian(uint64_t toFlip){
     uint64_t B1 = (toFlip & 0x00000000000000FF) << 56;
     uint64_t B2 = (toFlip & 0x000000000000FF00) << 40;
     uint64_t B3 = (toFlip & 0x0000000000FF0000) << 24;
@@ -62,4 +62,20 @@ uint64_t Flip8Byte(uint64_t toFlip){
     uint64_t B8 = (toFlip & 0xFF00000000000000) >> 56;
 
     return B1 | B2 | B3 | B4 | B5 | B6 | B7 | B8;
+}
+
+//Simple when reading from disk
+//With some numbers we want to swap the two bytes
+uint16_t BigEndian(uint16_t toFlip){
+    return toFlip;
+}
+
+//Or Four
+uint32_t BigEndian(uint32_t toFlip){
+    return toFlip;
+}
+
+//Or Eight
+uint64_t BigEndian(uint64_t toFlip){
+    return toFlip;
 }
