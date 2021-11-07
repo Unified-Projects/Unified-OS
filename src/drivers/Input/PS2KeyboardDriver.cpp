@@ -19,7 +19,8 @@ void PS2KeyboardEventHandler::OnKeyUp(char c){
 
 PS2KeyboardDriver::PS2KeyboardDriver(Interrupts::InterruptManager* manager, PS2KeyboardEventHandler* handler)
     : InterruptHandler(0x21, manager), //Setup interrupt
-      dataPort(0x60) //Set up port
+      dataPort(0x60), //Set up ports
+      commandPort(0x64)
 {
     Handler = handler; //Store handler pointer
 }
@@ -40,5 +41,17 @@ uint64_t PS2KeyboardDriver::HandleInterrupt(uint64_t rsp){
     return rsp;
 }
 void PS2KeyboardDriver::Activate(){
-    
+    while (commandPort.Read() & 0x01)
+    {
+        dataPort.Read();
+    }
+
+    commandPort.Write(0xAE); //PIC start sending interrupts
+    commandPort.Write(0x20); //Get state
+
+    uint8_t status = (dataPort.Read() | 1) & ~0x10;
+    commandPort.Write(0x60); //Set State
+    dataPort.Write(status);
+
+    dataPort.Write(0xF4); //Activate
 }

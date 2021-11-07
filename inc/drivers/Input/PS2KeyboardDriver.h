@@ -17,8 +17,10 @@ namespace UnifiedOS{
         };
 
         class PS2KeyboardDriver : public Interrupts::InterruptHandler, public Drivers::Driver{
-            IO::Port8Bit dataPort; //Port for data (to read scancode from)
-
+            //Ports
+            IO::Port8Bit dataPort;
+            IO::Port8Bit commandPort;
+            
             //The event handler
             PS2KeyboardEventHandler* Handler;
         public:

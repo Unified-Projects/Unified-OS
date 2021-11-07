@@ -41,49 +41,111 @@ public:
     }
 };
 
-// class MouseToConsole : public MouseEventHandler{
-//     uint32_t x, y;
-// public:
-//     MouseToConsole(){
-//         static uint16_t* VideoMemory = (uint16_t*)0xb8000;
-//
-//         x = 40;
-//         y = 12;
-//
-//         VideoMemory[80 * 12 + 40] = ((VideoMemory[80 * 12 + 40] & 0xF000) >> 4) |
-//                                     ((VideoMemory[80 * 12 + 40] & 0x0F00) << 4) |
-//                                     ((VideoMemory[80 * 12 + 40] & 0x00FF));
-//     }
-//
-//     void OnMouseMove(int xOff, int yOff){
-//         static uint16_t* VideoMemory = (uint16_t*)0xb8000;
-//    
-//         VideoMemory[80 * y + x] = ((VideoMemory[80 * y + x] & 0xF000) >> 4) |
-//                                   ((VideoMemory[80 * y + x] & 0x0F00) << 4) |
-//                                   ((VideoMemory[80 * y + x] & 0x00FF));
-//
-//         x += xOff;
-//         if(x < 0) x = 0;
-//         if(x >= 80) x = 79;
-//
-//         y += yOff;
-//         if(y < 0) y = 0;
-//         if(y >= 25) y = 24;
-//
-//         VideoMemory[80 * y + x] = ((VideoMemory[80 * y + x] & 0xF000) >> 4) |
-//                                   ((VideoMemory[80 * y + x] & 0x0F00) << 4) |
-//                                   ((VideoMemory[80 * y + x] & 0x00FF));
-//     }
-//
-//     void OnMouseDown(){
-//       
-//     }
-//
-//     void OnMouseUp(){
-//       
-//     }
-// };
-//
+uint8_t MousePointer[] = {
+    0b10000000, 0b00000000,
+    0b11000000, 0b00000000,
+    0b11100000, 0b00000000,
+    0b11110000, 0b00000000,
+    0b11111000, 0b00000000,
+    0b11111100, 0b00000000,
+    0b11111110, 0b00000000,
+    0b11111111, 0b00000000,
+    0b11111111, 0b10000000,
+    0b11111000, 0b00000000,
+    0b11011000, 0b00000000,
+    0b10011100, 0b00000000,
+    0b00001100, 0b00000000,
+    0b00001100, 0b00000000,
+    0b00000000, 0b00000000,
+    0b00000000, 0b00000000,
+};
+
+class MouseToScreen : public PS2MouseEventHandler{
+    uint32_t x, y;
+
+    uint32_t MouseCursorBuffer[16 * 16];
+    uint32_t MouseCursorBufferAfter[16 * 16];
+
+    bool Drawn = false;
+public:
+    MouseToScreen(){
+        x = __BOOT__BootContext__->framebuffer->Width / 2;
+        y = __BOOT__BootContext__->framebuffer->Height / 2;
+    }
+
+    void ClearMouse(){
+        if (!Drawn) return;
+
+        int xMax = 16;
+        int yMax = 16;
+        int differenceX = __BOOT__BootContext__->framebuffer->Width - x;
+        int differenceY = __BOOT__BootContext__->framebuffer->Height - y;
+
+        if (differenceX < 16) xMax = differenceX;
+        if (differenceY < 16) yMax = differenceY;
+
+        for (int yOff = 0; yOff < yMax; yOff++){
+            for (int xOff = 0; xOff < xMax; xOff++){
+                int bit = yOff * 16 + xOff;
+                int byte = bit / 8;
+                if ((MousePointer[byte] & (0b10000000 >> (xOff % 8))))
+                {
+                    if (getPix(x + xOff, y + yOff) == MouseCursorBufferAfter[xOff + yOff *16]){
+                        putPix(x + xOff, y + yOff, MouseCursorBuffer[xOff + yOff * 16]);
+                    }
+                }
+            }
+        }
+    }
+
+    void DrawMouse(){
+        int xMax = 16;
+        int yMax = 16;
+        int differenceX = __BOOT__BootContext__->framebuffer->Width - x;
+        int differenceY = __BOOT__BootContext__->framebuffer->Height - y;
+
+        if (differenceX < 16) xMax = differenceX;
+        if (differenceY < 16) yMax = differenceY;
+
+        for (int yOff = 0; yOff < yMax; yOff++){
+            for (int xOff = 0; xOff < xMax; xOff++){
+                int bit = yOff * 16 + xOff;
+                int byte = bit / 8;
+                if ((MousePointer[byte] & (0b10000000 >> (xOff % 8))))
+                {
+                    MouseCursorBuffer[xOff + yOff * 16] = getPix(x + xOff, y + yOff);
+                    putPix(x + xOff, y + yOff, 0xFFFFFFFF);
+                    MouseCursorBufferAfter[xOff + yOff * 16] = getPix(x + xOff, y + yOff);
+                }
+            }
+        }
+
+        Drawn = true;
+    }
+
+    void OnMouseMove(int xOff, int yOff){
+        ClearMouse();
+        
+        x += xOff;
+        if(x < 0) x = 0;
+        if(x >= __BOOT__BootContext__->framebuffer->Width) x = __BOOT__BootContext__->framebuffer->Width - 1;
+
+        y += yOff;
+        if(y < 0) y = 0;
+        if(y >= __BOOT__BootContext__->framebuffer->Height) y = __BOOT__BootContext__->framebuffer->Height - 1;
+
+        DrawMouse();
+    }
+
+    void OnMouseDown(){
+      
+    }
+
+    void OnMouseUp(){
+      
+    }
+};
+
 // void sysprintf(const char* str){
 //     asm("int $0x80" : : "a" (4), "b" (str));
 // }
@@ -145,14 +207,6 @@ void InitialisePaging(){
     asm("mov %0, %%cr3" : : "r" (PML4));
 }
 
-int testPrint(uint8_t rep, uint64_t val){
-    printf("Value: 0x");
-    printf(to_hstring(rep));
-    Next();
-
-    return 1;
-}
-
 extern "C" void kernelMain(BootInfo* bootInfo)
 {
     __BOOT__BootContext__ = bootInfo;
@@ -189,7 +243,10 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     PS2KeyboardDriver keyboard(&interrupts, &KeyboardHandler);
     driverManager.AddDriver(&keyboard);
 
-    //
+    //Mouse Driver
+    MouseToScreen MouseHandler;
+    PS2MouseDriver mouse(&interrupts, &MouseHandler);
+    driverManager.AddDriver(&mouse);
 
     //Activate Drivers
     driverManager.ActivateAll();
