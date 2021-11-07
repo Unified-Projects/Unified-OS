@@ -1,67 +1,112 @@
-#include "PageFrameAllocator.h"
+#include <paging/PageFrameAllocator.h>
 
-uint64_t freeMemory;
-uint64_t reservedMemory;
-uint64_t usedMemory;
+using namespace UnifiedOS;
+using namespace UnifiedOS::Paging;
+using namespace UnifiedOS::Boot;
+
+static uint64_t FreeMemory;
+static uint64_t ReservedMemory;
+static uint64_t UsedMemory;
+static uint64_t TotalMemory;
+
 bool Initialised = false;
-PageFrameAllocator GlobalAllocator;
+PageFrameAllocator UnifiedOS::Paging::__PAGING__PFA_GLOBAL;
 
-//Load memeory from boot loader
-void PageFrameAllocator::ReadEFIMemoryMap(EFI_MEMORY_DESCRIPTOR* mMap, size_t mMapSize, size_t DescriptorSize){
-    //Run once
-    if(Initialised) return;
-    Initialised = true;
+const uint64_t& UnifiedOS::Paging::__PAGING__TotalMemorySize__ = TotalMemory;
 
-    //Entry count
-    uint64_t mMapEntries = mMapSize / DescriptorSize;
+//Returns the Size Of Memory from the UEFI
+uint64_t GetMemorySize(EFI_MEMORY_DESCRIPTOR* mMap, uint64_t mMapEntries, uint64_t DescriptorSize){
+    uint64_t MemorySizeInBytes = 0;
 
-    //Segmenting
-    void* largestFreeMemSeg = NULL;
-    size_t largestFreeMemSegSize = 0;
-
-    //Loop over entries and find largest
     for (int i = 0; i < mMapEntries; i++){
         EFI_MEMORY_DESCRIPTOR* desc = (EFI_MEMORY_DESCRIPTOR*)((uint64_t)mMap + (i * DescriptorSize));
-        if(desc->type == 7){ //EfiConventionalMemory
-            if(desc->numPages * 4096 > largestFreeMemSegSize){
-                largestFreeMemSeg = desc->physAddr;
-                largestFreeMemSegSize = desc->numPages * 4096;
+        MemorySizeInBytes += desc->numPages * 4096;
+    }
+
+    TotalMemory = MemorySizeInBytes;
+
+    return MemorySizeInBytes;
+}
+
+void PageFrameAllocator::ReadEFIMemoryMap(EFI_MEMORY_DESCRIPTOR* mMap, size_t mMapSize, size_t DescriptorSize){
+    //Single Use
+    if(Initialised == true) return;
+    Initialised = true;
+
+    //Calculate Entries
+    uint64_t MapEntries = mMapSize / DescriptorSize;
+
+    //Largest Free Segment (For bitmap to be stored on (Not whole size though))
+    void* LargestSegment = nullptr;
+    size_t LargestSegmentSize = 0;
+
+    //Loop over entries
+    for(int e = 0; e < MapEntries; e++){
+        EFI_MEMORY_DESCRIPTOR* Descriptor = (EFI_MEMORY_DESCRIPTOR*)((uint64_t)mMap + (e * DescriptorSize));
+        
+        //Only Load Conventional (Free) Memory
+        if(Descriptor->type == 7){
+            if(Descriptor->numPages * 4096 > LargestSegmentSize){
+                LargestSegment = Descriptor->physAddr;
+                LargestSegmentSize = Descriptor->numPages * 4096;
             }
         }
     }
 
-    //Get total size
-    uint64_t memorySize = GetMemorySize(mMap, mMapEntries, DescriptorSize);
-    freeMemory = memorySize;
-    uint64_t bitmapSize = memorySize / 4096 / 8 + 1;
-
-    //Load 
-    InitBitmap(bitmapSize, largestFreeMemSeg);
-
-    //Lock all Pages
-    ReservePages(0, memorySize / 4096 + 1);
+    //Get the Total Size Of Memory
+    uint64_t MemorySize = GetMemorySize(mMap, MapEntries, DescriptorSize);
     
-    //If Loop over entries and unlock if its Conventional (Usable) memory
-    for (int i = 0; i < mMapEntries; i++){
-        EFI_MEMORY_DESCRIPTOR* desc = (EFI_MEMORY_DESCRIPTOR*)((uint64_t)mMap + (i * DescriptorSize));
-        if(desc->type == 7){ //EfiConventionalMemory
-            UnreservePages(desc->physAddr, desc->numPages);
+    //Call the memory all to be free (It is not but that gets fixed)
+    FreeMemory = MemorySize;
+
+    //Calculate how many Pages there are to be in the Bitmap
+    uint64_t BitmapSize = ((MemorySize / 4096) / 8) + 1;
+
+    //Load The Bitmap
+    InitBitmap(BitmapSize, LargestSegment);
+
+    //Class all pages as locked
+    ReservePages(0, MemorySize / 4096 + 1);
+
+    //Loop over any pages that are free (Same As Above)
+    for(int e = 0; e < MapEntries; e++){
+        EFI_MEMORY_DESCRIPTOR* Descriptor = (EFI_MEMORY_DESCRIPTOR*)((uint64_t)mMap + (e * DescriptorSize));
+        
+        //Only Load Conventional (Free) Memory
+        if(Descriptor->type == 7){
+            UnreservePages(Descriptor->physAddr, Descriptor->numPages);
         }
     }
-    //Lock Bios Pages
-    ReservePages(0, 0x100); //Reserver 0 - 0x100000 (BIOS)
-    //Lock Bitmap Pages
+
+    //Lock the BIOS pages
+    ReservePages(0, 0x100);
+
+    //Lock the Bitmap
     LockPages(PageBitmap.Buffer, PageBitmap.Size / 4096 + 1);
 }
 
-//Load bitmap at size of pages
+//Create a Bitmap of the pages
 void PageFrameAllocator::InitBitmap(size_t bitMapSize, void* bufferAddress){
+    //Setup Bitmap Definitions
     PageBitmap.Size = bitMapSize;
     PageBitmap.Buffer = (uint8_t*)bufferAddress;
-    for(int i = 0; i < bitMapSize; i++){
-        *(uint8_t*)(PageBitmap.Buffer + i) = 0;
+
+    //Loop over size
+    for(int b = 0; b < bitMapSize; b++){
+        *(uint8_t*)(PageBitmap.Buffer + b) = 0; //Set to Free (False)
     }
 }
+
+//
+//
+//
+//
+// NOTE CREATE PAGE FILES (TO STOP PAGE FAULTS)
+//
+//
+//
+//
+
 
 //Request a single page (returned)
 uint64_t pageBitmapIndex = 0;
@@ -72,7 +117,7 @@ void* PageFrameAllocator::RequestPage(){
         return (void*)(pageBitmapIndex * 4096);
     }
 
-    return NULL; // Page Frame Swap to file
+    return NULL; // Page Frame Swap file to be implemented
 }
 
 //Request Multiple Pages (returned)
@@ -100,8 +145,8 @@ void PageFrameAllocator::FreePage(void* address){
     uint64_t index = (uint64_t)address / 4096;
     if(PageBitmap[index] == false) return;
     if (PageBitmap.Set(index, false)){
-        freeMemory += 4096;
-        usedMemory -= 4096;
+        FreeMemory += 4096;
+        UsedMemory -= 4096;
         if(pageBitmapIndex > index) pageBitmapIndex = index;
     }
 }
@@ -118,8 +163,8 @@ void PageFrameAllocator::LockPage(void* address){
     uint64_t index = (uint64_t)address / 4096;
     if(PageBitmap[index] == true) return;
     if(PageBitmap.Set(index, true)){
-        freeMemory -= 4096;
-        usedMemory += 4096;
+        FreeMemory -= 4096;
+        UsedMemory += 4096;
     }
 }
 
@@ -135,8 +180,8 @@ void PageFrameAllocator::ReservePage(void* address){
     uint64_t index = (uint64_t)address / 4096;
     if(PageBitmap[index] == true) return;
     if(PageBitmap.Set(index, true)){
-        freeMemory -= 4096;
-        reservedMemory += 4096;
+        FreeMemory -= 4096;
+        ReservedMemory += 4096;
     }   
 }
 
@@ -152,8 +197,8 @@ void PageFrameAllocator::UnreservePage(void* address){
     uint64_t index = (uint64_t)address / 4096;
     if(PageBitmap[index] == false) return;
     if(PageBitmap.Set(index, false)){
-        freeMemory += 4096;
-        reservedMemory -= 4096;
+        FreeMemory += 4096;
+        ReservedMemory -= 4096;
         if(pageBitmapIndex > index) pageBitmapIndex = index;
     }
 }
@@ -167,15 +212,15 @@ void PageFrameAllocator::UnreservePages(void* address, uint64_t pageCount){
 
 //Get RamFree Memory Size (Bytes)
 uint64_t PageFrameAllocator::GetFreeRAM(){
-    return freeMemory;
+    return FreeMemory;
 }
 
 //Get Uses Memory Size (Bytes)
 uint64_t PageFrameAllocator::GetUsedRAM(){
-    return usedMemory;
+    return UsedMemory;
 }
 
 //Get Reserved Memory Size (Bytes)
 uint64_t PageFrameAllocator::GetReservedRAM(){
-    return reservedMemory;
+    return ReservedMemory;
 }

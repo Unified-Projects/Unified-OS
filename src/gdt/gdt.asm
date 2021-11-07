@@ -1,19 +1,22 @@
 [bits 64]
-LoadGDT:   
+GLOBAL LoadGDT
+LoadGDT:
     ;Load
     lgdt [rdi]
-    ;Set registers
+
+    ;Kernel Data
     mov ax, 0x10
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
     mov ss, ax
-    ;Replace
+
+    ;Kernel Code
     pop rdi
     mov rax, 0x08
     push rax
     push rdi
+
     ;Return
     retfq
-GLOBAL LoadGDT

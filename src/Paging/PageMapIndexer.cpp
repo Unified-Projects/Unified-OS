@@ -1,5 +1,9 @@
-#include "PageMapIndexer.h"
+#include <paging/PageMapIndexer.h>
 
+using namespace UnifiedOS;
+using namespace UnifiedOS::Paging;
+
+//Setup and indexer by mapping a virtualAddress
 PageMapIndexer::PageMapIndexer(uint64_t virtualAddress){
     virtualAddress >>= 12;
     P_i = virtualAddress & 0x1ff;

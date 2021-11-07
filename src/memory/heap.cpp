@@ -1,55 +1,62 @@
-#include "heap.h"
-#include "../Paging/PageTableManager.h"
-#include "../Paging/PageFrameAllocator.h"
+#include <memory/heap.h>
+#include <paging/PageFrameAllocator.h>
+#include <paging/PageTableManager.h>
+
+using namespace UnifiedOS;
+using namespace UnifiedOS::Memory;
+using namespace UnifiedOS::Paging;
 
 void* heapStart;
 void* heapEnd;
-HeapSegHdr* LastHdr;
+HeapBlockHeader* LastHdr;
 
-//Join two segments
-void HeapSegHdr::CombineForward(){
-    //If Exists and is free
-    if (next == NULL) return;
-    if (!next->free) return;
+//Join two segments (Hard to word comments)
+void HeapBlockHeader::CombineForward(){
+    //Check if there is a next to combine with
+    if (Next == nullptr) return;
 
-    //Configure Header(References)
-    if (next == LastHdr) LastHdr = this;
+    //Ensure it is free
+    if (!Next->Free) return;
 
-    //Refereences
-    if (next->next != NULL){
-        next->next->last = this;
+    //If next is the final header in the heap then assign to current
+    if (Next == LastHdr) LastHdr = this;
+
+    //If the next had a next then configure it to this
+    if (Next->Next != nullptr){
+        Next->Next->Prev = this;
     }
 
-    //Join Sizes
-    length = length + next->length + sizeof(HeapSegHdr);
+    //Combine the two sizes
+    Length = Length + Next->Length + sizeof(HeapBlockHeader);
 
-    //More References
-    next = next->next;
-}   
+    //Update this next to the actuall next position
+    Next = Next->Next;
+}
 
-//Combining
-void HeapSegHdr::CombineBackward(){
-    if (last != NULL && last->free) last->CombineForward();
+//Combine with the block behind
+void HeapBlockHeader::CombineBackward(){
+    //If the previous is free then just repeat combine forward for it
+    if (Prev != nullptr && Prev->Free) Prev->CombineForward();
 }
 
 //Separate one segment into 2 (return one of defined size)
-HeapSegHdr* HeapSegHdr::Split(size_t splitLength){
+HeapBlockHeader* HeapBlockHeader::Split(size_t splitLength){
     //Ensure it is long enough
     if(splitLength < 0x10) return NULL;
     //Get the other size
-    int64_t splitSegLength = length - splitLength - (sizeof(HeapSegHdr));
+    int64_t splitSegLength = Length - splitLength - (sizeof(HeapBlockHeader));
     //Ensure the other segment is big enough
     if(splitSegLength < 0x10) return NULL;
 
     //Split
-    HeapSegHdr* newSplitHdr = (HeapSegHdr*)((size_t)this + splitLength + sizeof(HeapSegHdr));
-    next->last = newSplitHdr; //Set next segments last to new
-    newSplitHdr->next = next; //Set new Segments next to the original
-    next = newSplitHdr; //Set new next Segment to the the new one
-    newSplitHdr->last = this; //Set this os the last for the new segment
-    newSplitHdr->length = splitSegLength; //Set headers length to calculated
-    newSplitHdr->free = free; //Make sure the new segments free (same as the original)
-    length = splitLength; //Set the new length of original to what it should be after split
+    HeapBlockHeader* newSplitHdr = (HeapBlockHeader*)((size_t)this + splitLength + sizeof(HeapBlockHeader));
+    Next->Prev = newSplitHdr; //Set next segments last to new
+    newSplitHdr->Next = Next; //Set new Segments next to the original
+    Next = newSplitHdr; //Set new next Segment to the the new one
+    newSplitHdr->Prev = this; //Set this os the last for the new segment
+    newSplitHdr->Length = splitSegLength; //Set headers length to calculated
+    newSplitHdr->Free = Free; //Make sure the new segments free (same as the original)
+    Length = splitLength; //Set the new length of original to what it should be after split
 
     //Sort references then return
     if(LastHdr == this) LastHdr = newSplitHdr;
@@ -57,81 +64,84 @@ HeapSegHdr* HeapSegHdr::Split(size_t splitLength){
 }
 
 //Heap setup
-void InitializeHeap(void* heapAddress, size_t pageCount){
+void Memory::InitialiseHeap(void* heapAddress, size_t pageCount){
     //(From Intitialise Kernel)
     void* pos = heapAddress; 
 
     //Get Pages from Allocator
     for(size_t i = 0; i < pageCount; i++){
-        GlobalPTM.MapMemory(pos, GlobalAllocator.RequestPage());
+        //Map them
+        __PAGING__PTM_GLOBAL.MapMemory(pos, __PAGING__PFA_GLOBAL.RequestPage());
         pos = (void*)((size_t)pos + 0x1000);
     }
 
     //Get Size of intial Heap
     size_t heapLength = pageCount * 0x1000;
 
-    //Setup first segment
+    //Setup first segment to use whole heap
     heapStart = heapAddress;
     heapEnd = (void*)((size_t)heapStart + heapLength);
-    HeapSegHdr* startSeg = (HeapSegHdr*)heapAddress;
-    startSeg->length = heapLength - sizeof(HeapSegHdr);
-    startSeg->next = NULL;
-    startSeg->last = NULL;
-    startSeg->free = true;
+    HeapBlockHeader* startSeg = (HeapBlockHeader*)heapAddress;
+    startSeg->Length = heapLength - (size_t)sizeof(HeapBlockHeader);
+    startSeg->Next = nullptr;
+    startSeg->Prev = nullptr;
+    startSeg->Free = true;
     LastHdr = startSeg;
 }
 
-
-#include "../screen/rendering/BasicRenderer.h"
-#include "../utils/cstr.h"
-
 //Allocate memory from heap
-void* malloc(size_t size){
+void* Memory::malloc(size_t size){
     //Make sure a valid size
     if (size % 0x10 > 0){ // it is not a multiple of 0x10
         size -= (size % 0x10);
         size += 0x10;
     }
     
-    //End
-    if (size == 0) return NULL;
+    //End if invalid
+    if (size == 0) return nullptr;
 
-    //Create Segments
-    HeapSegHdr* CurrentSegment = (HeapSegHdr*) heapStart;
+    //Create segment pointer to the first block
+    HeapBlockHeader* CurrentSegment = (HeapBlockHeader*) heapStart;
     while(true){
-        if(CurrentSegment->free){
-            if (CurrentSegment->length > size){
+        //Move allong heap untill heap found with correct size
+        if(CurrentSegment->Free){
+            if (CurrentSegment->Length > size){
                 CurrentSegment->Split(size);
-                CurrentSegment->free = false;
-                return (void*)((uint64_t)CurrentSegment + sizeof(HeapSegHdr));
+                CurrentSegment->Free = false;
+                return (void*)((uint64_t)CurrentSegment + sizeof(HeapBlockHeader));
             }
-            if (CurrentSegment->length == size){
-                CurrentSegment->free = false;
-                return (void*)((uint64_t)CurrentSegment + sizeof(HeapSegHdr));
+            if (CurrentSegment->Length == size){
+                CurrentSegment->Free = false;
+                return (void*)((uint64_t)CurrentSegment + sizeof(HeapBlockHeader));
             }
         }
-        if (CurrentSegment->next == NULL) break;
-        CurrentSegment = CurrentSegment->next;
+        if (CurrentSegment->Next == nullptr) break;
+        CurrentSegment = CurrentSegment->Next;
     }
 
-    //Add more memort to heap
+    //Add more memory to heap
     ExpandHeap(size);
 
-    //Continue until size is empty
+    //Continue until block found
     return malloc(size);
 }
 
 //Free a specific heap
-void free(void* address){
-    HeapSegHdr* segment = (HeapSegHdr*)address - 1;
-    segment->free = true;
+void Memory::free(void* address){
+    //Calculate where the segment is
+    HeapBlockHeader* segment = (HeapBlockHeader*)address - 1;
+
+    //Free it
+    segment->Free = true;
+
+    //Combine with neighbours if possible
     segment->CombineForward();
     segment->CombineBackward();
 }
 
 //Add more memory to heap
-void ExpandHeap(size_t length){
-    //Ensure pages fit 4MB
+void Memory::ExpandHeap(size_t length){
+    //Ensure pages fit 4KiB
     if (length % 0x1000) {
         length -= length % 0x1000;
         length += 0x1000;
@@ -140,21 +150,21 @@ void ExpandHeap(size_t length){
     //Get pages count
     size_t pageCount = length / 0x1000;
 
-    //Make a new segment
-    HeapSegHdr* newSegment = (HeapSegHdr*)heapEnd;
+    //Attach to end of heap
+    HeapBlockHeader* newSegment = (HeapBlockHeader*)heapEnd;
 
     //Load size onto segment
     for (size_t i = 0; i < pageCount; i++){
-        GlobalPTM.MapMemory(heapEnd, GlobalAllocator.RequestPage());
+        __PAGING__PTM_GLOBAL.MapMemory(heapEnd, __PAGING__PFA_GLOBAL.RequestPage());
         heapEnd = (void*)((size_t)heapEnd + 0x1000);
     }
 
     //Setup segment
-    newSegment->free = true;
-    newSegment->last = LastHdr;
-    LastHdr->next = newSegment;
+    newSegment->Free = true;
+    newSegment->Prev = LastHdr;
+    LastHdr->Next = newSegment;
     LastHdr = newSegment;
-    newSegment->next = NULL;
-    newSegment->length = length - sizeof(HeapSegHdr);
+    newSegment->Next = nullptr;
+    newSegment->Length = length - sizeof(HeapBlockHeader);
     newSegment->CombineBackward();
 }
