@@ -18,6 +18,10 @@
 #include <drivers/Input/PS2KeyboardDriver.h>
 #include <drivers/Input/PS2MouseDriver.h>
 
+#include <process/process.h>
+
+#include <exceptions/exceptions.h>
+
 using namespace UnifiedOS;
 using namespace UnifiedOS::Boot;
 using namespace UnifiedOS::GlobalDescriptorTable;
@@ -25,6 +29,8 @@ using namespace UnifiedOS::Paging;
 using namespace UnifiedOS::Memory;
 using namespace UnifiedOS::Interrupts;
 using namespace UnifiedOS::Drivers;
+using namespace UnifiedOS::Processes;
+using namespace UnifiedOS::Exceptions;
 
 //For locking the memory at the kernel
 extern uint64_t _KernelStart;
@@ -61,7 +67,7 @@ uint8_t MousePointer[] = {
 };
 
 class MouseToScreen : public PS2MouseEventHandler{
-    uint32_t x, y;
+    int64_t x, y;
 
     uint32_t MouseCursorBuffer[16 * 16];
     uint32_t MouseCursorBufferAfter[16 * 16];
@@ -164,6 +170,12 @@ public:
 //     }
 // }
 
+void KernelSecondStage(){
+    while(true){
+        printf("Test\n");
+    }
+}
+
 void InitialisePaging(){
     //Entries (Pages)
 	uint64_t mMapEntries = __BOOT__BootContext__->mMapSize / __BOOT__BootContext__->DescriptorSize;
@@ -214,8 +226,6 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     //Blank Screen
     Clear(0x00);
 
-    //testparse();
-
     //GDT
     GDTDescriptor gdt;
     gdt.Size = sizeof(GDT) - 1;
@@ -232,8 +242,32 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     //So its not too much of an issue.
     InitialiseHeap((void*)0x0000100000000000, 0xFF);
 
+    //Processes
+    ProcessManager processManager; //COMMENT
+
+    //TYPES
+    //User space (NEED TO IMPLEMENT) (https://wiki.osdev.org/Getting_to_Ring_3)
+    //    This will also need to link to system calls for userspace to reach
+    //Kernel space (This)
+
+    //NOTE FOR MULTITASKING IMPLEMENTATIONS
+    //      NEEDED
+    //Implement a TSS (Task State Segment) (https://wiki.osdev.org/TSS) and send to GDT
+    //Create a better task switching that does not rely on interrupts but uses a tick system where there are 10 ticks per task
+    //
+    //
+    //      Would be nice if
+    //Threading - Threads per processes
+
+    //Inti Processes
+    // Process kernelStage2((uint64_t)KernelSecondStage);
+    // processManager.AddProcess(&kernelStage2);
+
     //Interrupts (Default)
-    InterruptManager interrupts;
+    InterruptManager interrupts(&processManager);
+
+    //Intialise Exceptions
+    ExceptionManager Exceptions(&interrupts);
 
     //Drivers
     DriverManager driverManager;

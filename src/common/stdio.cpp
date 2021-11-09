@@ -104,6 +104,21 @@ void UnifiedOS::printf(const char* str){
 	}
 }
 
+void UnifiedOS::ClearPos(){
+    CursorX = 0;
+    CursorY = 0;
+}
+void UnifiedOS::OffsetPos(int x, int y){
+    CursorX += x;
+    CursorY += y;
+}
+void UnifiedOS::SetPosX(uint32_t x){
+    CursorX = x;
+}
+void UnifiedOS::SetPosY(uint32_t y){
+    CursorY = y;
+}
+
 // void printfHex(uint8_t val){
 //     char* ret = "0x  ";
 //     char* hex = "0123456789ABCDEF";

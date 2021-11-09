@@ -4,6 +4,8 @@
 #include <common/stdint.h>
 #include <IO/port.h>
 
+#include <process/process.h>
+
 namespace UnifiedOS{
     namespace Interrupts{
         //For the handler
@@ -26,6 +28,9 @@ namespace UnifiedOS{
         class InterruptManager{
             friend class InterruptHandler;
         protected:
+
+            //ProcessManager
+            Processes::ProcessManager* processes;
 
             //Stays constant and allows multiple interrupt managers
             static InterruptManager* ActiveInterruptManager;
@@ -124,7 +129,7 @@ namespace UnifiedOS{
 
         public:
             //Constructors
-            InterruptManager();
+            InterruptManager(Processes::ProcessManager* processManager);
             ~InterruptManager();
             
             //Return 0x20

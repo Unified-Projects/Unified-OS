@@ -121,6 +121,8 @@ int_bottom:
     ;Remove from stack in reverse order to adding
     popaq
 
+    ; add rsp, 4
+
 ; This is the entry for the ignore interrupt (will just return)
 global _ZN9UnifiedOS10Interrupts16InterruptManager15InterruptIgnoreEv
 _ZN9UnifiedOS10Interrupts16InterruptManager15InterruptIgnoreEv:

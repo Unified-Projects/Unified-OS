@@ -20,14 +20,10 @@ namespace UnifiedOS{
 
     void printf(const char* str);
 
-    // void printfHex(uint8_t val){
-    //     char* ret = "0x  ";
-    //     char* hex = "0123456789ABCDEF";
-    //     ret[2] = hex[(val >> 4) & 0xF];
-    //     ret[3] = hex[val & 0xF];
-    //     printf(ret);
-    // }
-
+    void ClearPos();
+    void OffsetPos(int x, int y);
+    void SetPosX(uint32_t x);
+    void SetPosY(uint32_t y);
 }
 
 #endif

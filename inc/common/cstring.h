@@ -18,15 +18,16 @@ namespace UnifiedOS{
     const char* to_string(double value, uint8_t dp);
     const char* to_string(double value);
 
-    //Compare 2 Strings
-    bool strcmp(const char* val1, const char* val2, size_t size);
-
-    //Returns the lenght of a string
-    int strlen(const char *str);
-
     //Copy a string
     // void strcpy(const char *dest, const char *src, size_t size);
     // void strcpy(const char *dest, const char *src);
 }
+
+//THESE SHOULD BE IN UNIFIED OS NAMESPACE IT JUST WAS NOT WORKING
+    //Compare 2 Strings
+    bool strcmp(const char* val1, const char* val2, size_t size);
+
+    //Returns the length of a string
+    int strlen(const char *str);
 
 #endif

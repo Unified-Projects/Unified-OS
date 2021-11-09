@@ -55,13 +55,16 @@ void InterruptManager::SetInterruptDescriptorTableEntry(uint8_t interrupt, uint6
     interruptDescriptorTable[interrupt].ist = ist & 0x7;
 }
 
-InterruptManager::InterruptManager()
+InterruptManager::InterruptManager(Processes::ProcessManager* processManager)
     //Setup port numbers
     :   PICMasterCommandPort(0x20),
         PICMasterDataPort(0x21),
         PICSlaveCommandPort(0xA0),
         PICSlaveDataPort(0xA1)
 {
+    //Processes
+    processes = processManager;
+
     //Initialise the idt_pointer
     idt_pointer.Limit = 256 * sizeof(GateDescriptor) - 1;
     idt_pointer.Offset = (uint64_t)(&interruptDescriptorTable);
@@ -183,6 +186,8 @@ uint64_t InterruptManager::HandleInterrupt(uint8_t interrupt, uint64_t rsp){
     return rsp; //Otherwise just return the stack
 }
 
+bool GP = false;
+
 //Main interupt handler
 uint64_t InterruptManager::DoHandleInterrupt(uint8_t interrupt, uint64_t rsp){
     if(handlers[interrupt] != 0){ //If a handler exists
@@ -196,7 +201,7 @@ uint64_t InterruptManager::DoHandleInterrupt(uint8_t interrupt, uint64_t rsp){
         //NOTE
         //Dissable in future when i have a graphical display as will be useless
     }
-
+    
     //If it is a hardware interrupt we need to tell the PIC its ended
     if(hardwareInterruptOffset <= interrupt && interrupt <= hardwareInterruptOffset + 16)
     {
