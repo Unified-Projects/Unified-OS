@@ -12,25 +12,31 @@
 #include <memory/memory.h>
 #include <memory/heap.h>
 
+#include <process/process.h>
+
 #include <interrupts/interrupts.h>
+#include <exceptions/exceptions.h>
+#include <interrupts/timer/pit.h>
 
 #include <drivers/Driver.h>
 #include <drivers/Input/PS2KeyboardDriver.h>
 #include <drivers/Input/PS2MouseDriver.h>
 
-#include <process/process.h>
-
-#include <exceptions/exceptions.h>
-
 using namespace UnifiedOS;
 using namespace UnifiedOS::Boot;
+
 using namespace UnifiedOS::GlobalDescriptorTable;
+
 using namespace UnifiedOS::Paging;
 using namespace UnifiedOS::Memory;
-using namespace UnifiedOS::Interrupts;
-using namespace UnifiedOS::Drivers;
+
 using namespace UnifiedOS::Processes;
+
+using namespace UnifiedOS::Interrupts;
 using namespace UnifiedOS::Exceptions;
+using namespace UnifiedOS::Interrupts::Timer;
+
+using namespace UnifiedOS::Drivers;
 
 //For locking the memory at the kernel
 extern uint64_t _KernelStart;
@@ -243,7 +249,7 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     InitialiseHeap((void*)0x0000100000000000, 0xFF);
 
     //Processes
-    ProcessManager processManager; //COMMENT
+    ProcessManager processManager; //COMMENTS NEEDED
 
     //TYPES
     //User space (NEED TO IMPLEMENT) (https://wiki.osdev.org/Getting_to_Ring_3)
@@ -259,7 +265,7 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     //      Would be nice if
     //Threading - Threads per processes
 
-    //Inti Processes
+    //Intitiate Processes
     // Process kernelStage2((uint64_t)KernelSecondStage);
     // processManager.AddProcess(&kernelStage2);
 
@@ -286,14 +292,16 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     driverManager.ActivateAll();
 
     //PIT
+    __TIMER__PIT__ = new PIT(&interrupts);
+    __TIMER__PIT__->SetFrequency(100); //INACURRATE
 
     //Interrupts activation
     interrupts.Activate();
 
-    printf("Done!\n");
+    //Intialise Done
+    printf("Done\n");
 
     while(true){
-        //printf("n");
         asm("hlt"); //Saves performance
     }
 }
