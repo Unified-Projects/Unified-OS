@@ -4,12 +4,37 @@
 #include <common/stdint.h>
 #include <IO/port.h>
 
-#include <process/process.h>
+#include <process/scheduler/Scheduler.h>
 
 namespace UnifiedOS{
     namespace Interrupts{
         //For the handler
         class InterruptManager;
+
+        struct InterruptRegistersStack
+        {
+            uint64_t r15;
+            uint64_t r14;
+            uint64_t r13;
+            uint64_t r12;
+            uint64_t r11;
+            uint64_t r10;
+            uint64_t r9;
+            uint64_t r8;
+            uint64_t rbp;
+            uint64_t rdi;
+            uint64_t rsi;
+            uint64_t rdx;
+            uint64_t rcx;
+            uint64_t rbx;
+            uint64_t rax;
+            uint64_t rip;
+            uint64_t cs;
+            uint64_t rflags;
+            uint64_t rsp;
+            uint64_t ss;
+        };
+        
 
         class InterruptHandler{
         protected:  
@@ -28,10 +53,6 @@ namespace UnifiedOS{
         class InterruptManager{
             friend class InterruptHandler;
         protected:
-
-            //ProcessManager
-            Processes::ProcessManager* processes;
-
             //Stays constant and allows multiple interrupt managers
             static InterruptManager* ActiveInterruptManager;
 
@@ -129,7 +150,7 @@ namespace UnifiedOS{
 
         public:
             //Constructors
-            InterruptManager(Processes::ProcessManager* processManager);
+            InterruptManager();
             ~InterruptManager();
             
             //Return 0x20

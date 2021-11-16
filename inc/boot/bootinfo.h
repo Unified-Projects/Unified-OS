@@ -19,17 +19,19 @@ namespace UnifiedOS{
 		} PSF1_FONT;
 
 		//IO
-		struct RSDP2{
-			unsigned char Signature[8];
-			uint8_t Checksum;
-			uint8_t OEMId[6];
-			uint8_t Revision;
-			uint32_t RSFTAddress;
-			uint32_t Length;
-			uint64_t XSDTAddress;
-			uint8_t ExtendedChecksum;
-			uint8_t Reseved[3];
-		} __attribute__((packed));
+		namespace ACPI{
+			struct RSDP2{
+				unsigned char Signature[8];
+				uint8_t Checksum;
+				uint8_t OEMId[6];
+				uint8_t Revision;
+				uint32_t RSFTAddress;
+				uint32_t Length;
+				uint64_t XSDTAddress;
+				uint8_t ExtendedChecksum;
+				uint8_t Reseved[3];
+			} __attribute__((packed));
+		}
 
 		//Memory
 		struct EFI_MEMORY_DESCRIPTOR{
@@ -55,7 +57,7 @@ namespace UnifiedOS{
 			EFI_MEMORY_DESCRIPTOR* mMap;
 			uint64_t mMapSize;
 			uint64_t DescriptorSize;
-			RSDP2* rsdp; //ACPI
+			ACPI::RSDP2* rsdp; //ACPI
 		};
 
 		//Global

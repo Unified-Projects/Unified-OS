@@ -41,17 +41,17 @@ uint64_t PS2KeyboardDriver::HandleInterrupt(uint64_t rsp){
     return rsp;
 }
 void PS2KeyboardDriver::Activate(){
-    while (commandPort.Read() & 0x01)
-    {
-        dataPort.Read();
-    }
+    // while (commandPort.Read() & 0x01)
+    // {
+    //     dataPort.Read();
+    // }
 
-    commandPort.Write(0xAE); //PIC start sending interrupts
-    commandPort.Write(0x20); //Get state
+    // commandPort.Write(0xAE); //PIC start sending interrupts
+    // commandPort.Write(0x20); //Get state
 
-    uint8_t status = (dataPort.Read() | 1) & ~0x10;
-    commandPort.Write(0x60); //Set State
-    dataPort.Write(status);
+    // uint8_t status = (dataPort.Read() | 1) & ~0x10;
+    // commandPort.Write(0x60); //Set State
+    // dataPort.Write(status);
 
-    dataPort.Write(0xF4); //Activate
+    // dataPort.Write(0xF4); //Activate
 }

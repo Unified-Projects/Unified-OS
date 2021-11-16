@@ -50,38 +50,38 @@ void PS2MouseDriver::Wait_Input(){
 }
 
 void PS2MouseDriver::Activate(){
-    offset = 0; //Default Buffers
-    buttons = 0;
+    // offset = 0; //Default Buffers
+    // buttons = 0;
 
-    commandPort.Write(0xA8); //PIC start sending interrupts
-    Wait();
+    // commandPort.Write(0xA8); //PIC start sending interrupts
+    // Wait();
 
-    commandPort.Write(0x20); //Get state
-    Wait_Input();
+    // commandPort.Write(0x20); //Get state
+    // Wait_Input();
 
-    uint8_t status = dataPort.Read() | 2;
-    Wait();
+    // uint8_t status = dataPort.Read() | 2;
+    // Wait();
     
-    commandPort.Write(0x60); //Set State
-    Wait();
+    // commandPort.Write(0x60); //Set State
+    // Wait();
 
-    dataPort.Write(status);
+    // dataPort.Write(status);
 
-    Wait();
-    commandPort.Write(0xD4);
-    Wait();
-    dataPort.Write(0xF6); //Activate
+    // Wait();
+    // commandPort.Write(0xD4);
+    // Wait();
+    // dataPort.Write(0xF6); //Activate
 
-    Wait_Input();
-    dataPort.Read();
+    // Wait_Input();
+    // dataPort.Read();
 
-    Wait();
-    commandPort.Write(0xD4);
-    Wait();
-    dataPort.Write(0xF4); //Activate
+    // Wait();
+    // commandPort.Write(0xD4);
+    // Wait();
+    // dataPort.Write(0xF4); //Activate
 
-    Wait_Input();
-    dataPort.Read();
+    // Wait_Input();
+    // dataPort.Read();
 }
 
 bool Skip = true;

@@ -9,6 +9,8 @@ using namespace UnifiedOS;
 using namespace UnifiedOS::Boot;
 using namespace UnifiedOS::Exceptions;
 
+//NOTE CREATE A HANDLER FOR THIS SO IT KILLS A PROGRAM INSTEAD OF A FULL KERNEL PANIC
+
 //Image (For When Img file not loaded)
 int ErrImg[18][54] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1},

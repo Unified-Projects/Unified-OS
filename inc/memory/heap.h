@@ -45,7 +45,12 @@ namespace UnifiedOS{
 inline void* operator new(size_t size) {return UnifiedOS::Memory::malloc(size);}
 inline void* operator new[](size_t size) {return UnifiedOS::Memory::malloc(size);} // (new char[123] will return a char* with size of 123)
 
+inline void* operator new(size_t size, void* p) {return p;}
+inline void* operator new[](size_t size, void* p) {return p;}
+
 //Acts as a deleter for pointers
 inline void operator delete(void* p) {UnifiedOS::Memory::free(p);}
+inline void operator delete[](void* p) {UnifiedOS::Memory::free(p);}
+inline void operator delete(void* p, size_t l) {UnifiedOS::Memory::free(p);}
 
 #endif

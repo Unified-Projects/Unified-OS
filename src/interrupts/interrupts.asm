@@ -24,6 +24,14 @@ _ZN9UnifiedOS10Interrupts16InterruptManager%2HandleInterruptRequest%1Ev:
     jmp int_bottom
 %endmacro
 
+;Syscalls
+%macro HandleSyscallInterruptRequest 2
+global _ZN9UnifiedOS10Interrupts16InterruptManager%2HandleInterruptRequest%1Ev
+_ZN9UnifiedOS10Interrupts16InterruptManager%2HandleInterruptRequest%1Ev:
+    mov byte [interruptnumber], %1
+    jmp int_bottom
+%endmacro
+
 ; Setup Exceptions
 HandleException 0, 16
 HandleException 1, 16
@@ -66,7 +74,7 @@ HandleInterruptRequest 15, 24
 HandleInterruptRequest 49, 24
 
 ; Syscalls
-HandleInterruptRequest 128, 25
+HandleSyscallInterruptRequest 128, 25
 
 ; 32-Bit mode has pusha 64 does not
 %macro pushaq 0

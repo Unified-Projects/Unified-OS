@@ -55,15 +55,13 @@ void InterruptManager::SetInterruptDescriptorTableEntry(uint8_t interrupt, uint6
     interruptDescriptorTable[interrupt].ist = ist & 0x7;
 }
 
-InterruptManager::InterruptManager(Processes::ProcessManager* processManager)
+InterruptManager::InterruptManager()
     //Setup port numbers
     :   PICMasterCommandPort(0x20),
         PICMasterDataPort(0x21),
         PICSlaveCommandPort(0xA0),
         PICSlaveDataPort(0xA1)
 {
-    //Processes
-    processes = processManager;
 
     //Initialise the idt_pointer
     idt_pointer.Limit = 256 * sizeof(GateDescriptor) - 1;
@@ -83,6 +81,7 @@ InterruptManager::InterruptManager(Processes::ProcessManager* processManager)
         SetInterruptDescriptorTableEntry(i, (uint64_t)InterruptIgnore, 0x08, IDT_INTERRUPT_GATE);
         handlers[i] = 0;
     }
+
     //So we have to do the first last
     SetInterruptDescriptorTableEntry(0, (uint64_t)InterruptIgnore, 0x08, IDT_INTERRUPT_GATE);
     handlers[0] = 0;
@@ -125,7 +124,7 @@ InterruptManager::InterruptManager(Processes::ProcessManager* processManager)
         SetInterruptDescriptorTableEntry(hardwareInterruptOffset + 0x0D, (uint64_t)HandleInterruptRequest13, 0x08, IDT_INTERRUPT_GATE);
         SetInterruptDescriptorTableEntry(hardwareInterruptOffset + 0x0E, (uint64_t)HandleInterruptRequest14, 0x08, IDT_INTERRUPT_GATE);
         SetInterruptDescriptorTableEntry(hardwareInterruptOffset + 0x0F, (uint64_t)HandleInterruptRequest15, 0x08, IDT_INTERRUPT_GATE);
-        SetInterruptDescriptorTableEntry(0x80, (uint64_t)HandleInterruptRequest128, 0x8, 0xEE, 0); //Syscall
+        SetInterruptDescriptorTableEntry(0x80, (uint64_t)HandleInterruptRequest128, 0x8, IDT_INTERRUPT_GATE /*Change to 0xEE*/); //Syscall
     //
     
     //Loads the interrupts
@@ -150,6 +149,7 @@ InterruptManager::InterruptManager(Processes::ProcessManager* processManager)
 
     PICMasterDataPort.Write(0x00);
     PICSlaveDataPort.Write(0x00);
+
     // PICMasterDataPort.Write(MMask);
     // PICSlaveDataPort.Write(SMask);
 }
@@ -200,6 +200,11 @@ uint64_t InterruptManager::DoHandleInterrupt(uint8_t interrupt, uint64_t rsp){
         printf("\n");
         //NOTE
         //Dissable in future when i have a graphical display as will be useless
+    }
+
+    //TaskSwitching
+    if(interrupt == hardwareInterruptOffset){
+        Scheduling::__SCHEDULER__->Tick();
     }
     
     //If it is a hardware interrupt we need to tell the PIC its ended

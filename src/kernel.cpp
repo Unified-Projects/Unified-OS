@@ -5,6 +5,7 @@
 #include <common/cstring.h>
 
 #include <gdt/gdt.h>
+#include <gdt/tss.h>
 
 #include <paging/PageTableManager.h>
 #include <paging/PageFrameAllocator.h>
@@ -12,15 +13,25 @@
 #include <memory/memory.h>
 #include <memory/heap.h>
 
-#include <process/process.h>
+//I think shecduiling should be here not process
+#include <process/process.h> //Comment
 
 #include <interrupts/interrupts.h>
 #include <exceptions/exceptions.h>
+#include <interrupts/syscalls.h> //Comment
 #include <interrupts/timer/pit.h>
 
 #include <drivers/Driver.h>
+#include <drivers/Intel/AHCI/AHCI.h>
+
+#include <IO/DeviceManager/DeviceManager.h> //Comment
+
+#include <fs/VolumeManager.h> //Comment
+
 #include <drivers/Input/PS2KeyboardDriver.h>
 #include <drivers/Input/PS2MouseDriver.h>
+
+#include <vector.h> //Comment and remvoe (ingnorable)
 
 using namespace UnifiedOS;
 using namespace UnifiedOS::Boot;
@@ -34,9 +45,14 @@ using namespace UnifiedOS::Processes;
 
 using namespace UnifiedOS::Interrupts;
 using namespace UnifiedOS::Exceptions;
+using namespace UnifiedOS::Interrupts::Syscalls;
 using namespace UnifiedOS::Interrupts::Timer;
 
 using namespace UnifiedOS::Drivers;
+
+using namespace UnifiedOS::Devices;
+
+using namespace UnifiedOS::FileSystem;
 
 //For locking the memory at the kernel
 extern uint64_t _KernelStart;
@@ -46,9 +62,9 @@ class PrintfKeyboardEventHandler : public PS2KeyboardEventHandler{
 public:
     void OnKeyDown(char c){
         if(c < 0x80){
-            printf("Keyboard 0x");
-            printf(to_hstring((uint8_t)c));
-            Next();
+            // printf("Keyboard 0x");
+            // printf(to_hstring((uint8_t)c));
+            // Next();
         }
     }
 };
@@ -165,7 +181,7 @@ public:
 // void TaskA(){
 //     while (true)
 //     {
-//         sysprintf("Tast A Test\n");
+//         printf("Tast A Test\n");
 //     }
 // }
 //
@@ -225,6 +241,80 @@ void InitialisePaging(){
     asm("mov %0, %%cr3" : : "r" (PML4));
 }
 
+inline void WaitSignal() {
+    IO::Port8Bit CommandPort(0x64);
+    int timeout = 10000;
+    while (timeout--)
+        if ((CommandPort.Read() & 0x2) != 0x2)
+            return;
+}
+
+template <bool isMouse> inline void WaitData() {
+    IO::Port8Bit CommandPort(0x64);
+    int timeout = 10000;
+    while (timeout--)
+        if ((CommandPort.Read() & 0x21) == (isMouse ? 0x21 : 0x1))
+            return;
+}
+
+void PS2Init(){
+    IO::Port8Bit DataPort(0x60);
+    IO::Port8Bit CommandPort(0x64);
+    IO::Port8Bit PITMaster(0x20);
+
+    // Start by disabling both ports
+    WaitSignal();
+    CommandPort.Write(0xAD);
+    WaitSignal();
+    CommandPort.Write(0xA7);
+
+    DataPort.Read(); // Discard any data
+
+    WaitSignal();
+    CommandPort.Write(0x20);
+    WaitData<false>();
+    uint8_t status = PITMaster.Read();
+
+    WaitSignal();
+    CommandPort.Write(0xAE);
+    WaitSignal();
+    CommandPort.Write(0xA8);
+
+    // Enable interrupts, enable keyboard and mouse clock
+    status = ((status & ~0x30) | 3);
+    WaitSignal();
+    CommandPort.Write(0x60);
+    WaitSignal();
+    CommandPort.Write(status);
+    WaitData<false>();
+    DataPort.Read();
+}
+
+void InitVolumes(DriverManager* driverM){
+
+    //NOTE
+    //TRY TO SETUP WITH LOOKING TO SEE IF THE VOLUME
+
+    //Locate Driver
+    Driver* driver = driverM->FindDriver("ACPI 1.0 Driver");
+
+    //Ensure Driver Found
+    if(driver != nullptr){
+        //Convert to AHCI
+        if(driver->MainObject != nullptr){
+            Drivers::AHCI::AHCIDriver* AHCIdriver = (Drivers::AHCI::AHCIDriver*)(driver->MainObject);
+            //Look at ports
+            for(int p = 0; p < AHCIdriver->portCount; p++){
+                //Find Disks
+                if(AHCIdriver->Ports[p]->portType == AHCI::AHCIPort::PortType::SATA){
+                    //Mount
+                    __FS_VOLUME_MANAGER__->MountVolume(AHCIdriver->Ports[p]);
+                }
+            }
+        }
+    }
+}
+
 extern "C" void kernelMain(BootInfo* bootInfo)
 {
     __BOOT__BootContext__ = bootInfo;
@@ -232,14 +322,22 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     //Blank Screen
     Clear(0x00);
 
-    //GDT
-    GDTDescriptor gdt;
-    gdt.Size = sizeof(GDT) - 1;
-    gdt.Offset = (uint64_t)&DefaultGDT; 
-    LoadGDT(&gdt);
-    
     //Memory
     InitialisePaging();
+
+    //TSS
+    TSS tss; //COMMENT //Make Global to be modified by the process
+
+    //GDT
+    GDT gdtTable = DefaultGDT;
+    gdtTable.TSS.Base0 = ((uint32_t)&tss) & 0xFFFF;
+    gdtTable.TSS.Base1 = (((uint32_t)&tss) >> 16) & 0xFF;
+    gdtTable.TSS.Base2 = (((uint32_t)&tss) >> 24) & 0xFF;
+
+    GDTDescriptor gdt;
+    gdt.Size = sizeof(GDT) - 1;
+    gdt.Offset = (uint64_t)&gdtTable;
+    LoadGDT(&gdt);
 
     //Heap
     //We use a high address to not interrupt other addresses
@@ -249,7 +347,12 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     InitialiseHeap((void*)0x0000100000000000, 0xFF);
 
     //Processes
-    ProcessManager processManager; //COMMENTS NEEDED
+    //COMMENTS NEEDED (ALSO RECODE IT ALL!)
+    Scheduling::InitializeProcess();
+    // Process& proctest = Scheduling::__SCHEDULER__->NewProcess(3);
+    // proctest.SetLevel(3);
+    // proctest.ContextCreation((uint64_t)TaskA, 0);
+    // proctest.SetRunning(true);
 
     //TYPES
     //User space (NEED TO IMPLEMENT) (https://wiki.osdev.org/Getting_to_Ring_3)
@@ -265,18 +368,25 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     //      Would be nice if
     //Threading - Threads per processes
 
-    //Intitiate Processes
-    // Process kernelStage2((uint64_t)KernelSecondStage);
-    // processManager.AddProcess(&kernelStage2);
-
     //Interrupts (Default)
-    InterruptManager interrupts(&processManager);
+    InterruptManager interrupts;
+
+    //ERRORS WITH PIT MAPPING ON MODERN HARDWARE
+    //APIC MAY FIX THESE ISSUES WHO KNOWS?
+
+    //Syscalls
+    SyscallHandler syscalls(&interrupts);
 
     //Intialise Exceptions
     ExceptionManager Exceptions(&interrupts);
 
     //Drivers
     DriverManager driverManager;
+
+    //Devices
+    DeviceManager devices(&driverManager);
+
+    //NOTE MCFG IN ACPI NEEDS TO BE FIXED TO FIND CORRECT ENTRIES!!!
 
     //Keyboard Driver
     PrintfKeyboardEventHandler KeyboardHandler;
@@ -290,6 +400,7 @@ extern "C" void kernelMain(BootInfo* bootInfo)
 
     //Activate Drivers
     driverManager.ActivateAll();
+    PS2Init();
 
     //PIT
     __TIMER__PIT__ = new PIT(&interrupts);
@@ -298,10 +409,15 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     //Interrupts activation
     interrupts.Activate();
 
+    //Volumes
+    InitVolumes(&driverManager);
+    //GP FAULT CAUSED HERE... ^
+
     //Intialise Done
     printf("Done\n");
 
     while(true){
+        // printf("Task Kernel...\n");
         asm("hlt"); //Saves performance
     }
 }

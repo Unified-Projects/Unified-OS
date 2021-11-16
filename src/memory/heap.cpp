@@ -101,7 +101,7 @@ void* Memory::malloc(size_t size){
     if (size == 0) return nullptr;
 
     //Create segment pointer to the first block
-    HeapBlockHeader* CurrentSegment = (HeapBlockHeader*) heapStart;
+    HeapBlockHeader* CurrentSegment = (HeapBlockHeader*)heapStart;
     while(true){
         //Move allong heap untill heap found with correct size
         if(CurrentSegment->Free){
@@ -115,7 +115,7 @@ void* Memory::malloc(size_t size){
                 return (void*)((uint64_t)CurrentSegment + sizeof(HeapBlockHeader));
             }
         }
-        if (CurrentSegment->Next == nullptr) break;
+        if (CurrentSegment->Next == NULL) break;
         CurrentSegment = CurrentSegment->Next;
     }
 
@@ -155,8 +155,11 @@ void Memory::ExpandHeap(size_t length){
 
     //Load size onto segment
     for (size_t i = 0; i < pageCount; i++){
-        __PAGING__PTM_GLOBAL.MapMemory(heapEnd, __PAGING__PFA_GLOBAL.RequestPage());
-        heapEnd = (void*)((size_t)heapEnd + 0x1000);
+        void* Page = __PAGING__PFA_GLOBAL.RequestPage();
+        if(Page != NULL){
+            __PAGING__PTM_GLOBAL.MapMemory(heapEnd, Page);
+            heapEnd = (void*)((size_t)heapEnd + 0x1000);
+        }
     }
 
     //Setup segment

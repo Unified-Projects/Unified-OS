@@ -48,3 +48,18 @@ void DriverManager::ActivateAll()
             drivers[i]->Activate();
     }
 }
+
+#include <common/stdio.h>
+
+//Find a driver int the list
+Driver* DriverManager::FindDriver(const char* Name){
+    for(int i = 0; i < numDrivers; i++){
+        if(drivers[i] != 0){
+            if(*(drivers[i]->DriverName) == *Name){
+                return drivers[i];
+            }
+        }
+    }
+
+    return nullptr;
+}

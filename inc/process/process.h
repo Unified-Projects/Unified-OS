@@ -4,60 +4,53 @@
 #include <common/stdint.h>
 
 namespace UnifiedOS{
+    namespace Scheduling{
+        class Scheduler;
+    }
+
     namespace Processes{
-        struct CPUState
+        struct ProcessContext
         {
-            uint64_t r15;
-            uint64_t r14;
-            uint64_t r13;
-            uint64_t r12;
-            uint64_t r11;
-            uint64_t r10;
-            uint64_t r9;
-            uint64_t r8;
-
-            uint64_t rbp;
-            uint64_t rdi;
-            uint64_t rsi;
-            uint64_t rdx;
-            uint64_t rcx;
-            uint64_t rbx;
-            uint64_t rax;
-
-            uint64_t rip;
-
-            uint64_t cs;
-            uint64_t rflags;
-            uint64_t rsp;
-            uint64_t ss;
+            uint64_t cr3, rip, rflags, reserved1; // offset 0x00
+            uint64_t cs, ss, fs, gs; // offset 0x20
+            uint64_t rax, rbx, rcx, rdx, rdi, rsi, rsp, rbp; // offset 0x40
+            uint64_t r8, r9, r10, r11, r12, r13, r14, r15; // offset 0x80
+            uint8_t fxsave_area[512]; // offset 0xc0
         } __attribute__((packed));
         
-
         class Process{
-            friend class ProcessManager;
-        private:
-            uint8_t* stack; //4KiB
-            CPUState* cpu;
+            friend Scheduling::Scheduler;
+        public:
+            static const int DefaultLevel = 1;
+            static const size_t DefaultStackBytes = 4096;
 
         public:
-            Process(uint64_t entrypoint);
-            //Add a ELF version
+            Process& ContextCreation(uint64_t entry, int64_t data);
+
+            ProcessContext& GetContext();
+            uint64_t GetPID() const;
+            Process& Sleep();
+            Process& Wakeup();
+
+            int GetLevel() const { return Level;}
+            bool GetRunning() const { return Running; }
+
+        private:
+            uint64_t PID;
+            uint8_t* Stack; // 4KiB
+            alignas(16) ProcessContext Context;
+            uint32_t Level{DefaultLevel};
+
+            //Active
+            bool Running{false};
+
+        public:
+            Process& SetLevel(int level) {Level = level; return *this;};
+            Process& SetRunning(bool running) {Running = running; return *this;}
+
+        protected:
+            Process(uint64_t pid);
             ~Process();
-        };
-
-        class ProcessManager{
-        private:
-            Process* processes[256];
-            int processCount;
-            int currentProcess;
-        
-        public:
-            ProcessManager();
-            ~ProcessManager();
-
-            bool AddProcess(Process* process);
-
-            CPUState* Schedule(CPUState* cpu);
         };
     }
 }

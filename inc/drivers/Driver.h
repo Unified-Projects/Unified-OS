@@ -10,6 +10,10 @@ namespace UnifiedOS{
         public:
             Driver();
             ~Driver();
+
+            const char* DriverName = "Default Driver";
+
+            void* MainObject = nullptr;
             
             virtual void Activate(); //Some require some code on start
             virtual int Reset();
@@ -26,6 +30,8 @@ namespace UnifiedOS{
             DriverManager();
             ~DriverManager();
             void AddDriver(Driver* driver); //Adds a driver to the stack
+
+            Driver* FindDriver(const char* Name);
             
             void ActivateAll(); //Activates all the drivers
         };

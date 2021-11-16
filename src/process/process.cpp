@@ -1,70 +1,59 @@
 #include <process/process.h>
 
 #include <memory/heap.h>
+#include <memory/memory.h>
+
+#include <process/Scheduler/Scheduler.h>
 
 using namespace UnifiedOS;
 using namespace UnifiedOS::Processes;
 using namespace UnifiedOS::Memory;
 
-Process::Process(uint64_t entrypoint){
-    stack = (uint8_t*)malloc(4096);
+const uint16_t kKernelCS = 1 << 3;
+const uint16_t kKernelSS = 2 << 3;
+const uint16_t kKernelDS = 0;
 
-    cpu = (CPUState*)(stack + 4096 - sizeof(CPUState));
+Process& Process::ContextCreation(uint64_t entry, int64_t data){
+    const size_t StackSize = DefaultStackBytes;
+    Stack = new uint8_t[StackSize];
+    uint64_t StackEnd = reinterpret_cast<uint64_t>(Stack) + StackSize;
 
-    cpu->r15 = 0;
-    cpu->r14 = 0;
-    cpu->r13 = 0;
-    cpu->r12 = 0;
-    cpu->r11 = 0;
-    cpu->r10 = 0;
-    cpu->r9 = 0;
-    cpu->r8 = 0;
-    
-    cpu->rbp = 0;
-    cpu->rdi = 0;
-    cpu->rsi = 0;
-    cpu->rdx = 0;
-    cpu->rcx = 0;
-    cpu->rbx = 0;
-    cpu->rax = 0;
+    memset(&Context, 0, sizeof(Context));
 
-    //Entry
-    cpu->rip = entrypoint;
+    asm volatile("mov %%cr3, %0" : "=r" (Context.cr3));
+    Context.rflags = 0x202;
+    Context.cs = kKernelCS;
+    Context.ss = kKernelSS;
+    Context.rsp = (StackEnd & ~0xflu) - 8;
 
-    cpu->cs = 0x08; //Usermode Needed //GDT Code sector
-    cpu->rflags = 0x202;
-    // cpu->rsp = (uint64_t)stack;
-    // cpu->ss = 0; //Usermode Needed //SS Not implemented
+    Context.rip = entry;
+    Context.rdi = PID;
+    Context.rsi = data;
+
+    // Mask all exceptions of MXCSR.
+    *reinterpret_cast<uint32_t*>(&Context.fxsave_area[24]) = 0x1f80;
+
+    return *this;
+}
+
+ProcessContext& Process::GetContext(){
+    return Context;
+}
+uint64_t Process::GetPID() const{
+    return PID;
+}
+Process& Process::Sleep(){
+    Scheduling::__SCHEDULER__->Sleep(this);
+    return *this;
+}
+Process& Process::Wakeup(){
+    Scheduling::__SCHEDULER__->Wakeup(this);
+    return *this;
+}
+
+Process::Process(uint64_t pid){
+    PID = pid;
 }
 Process::~Process(){
 
-}
-
-ProcessManager::ProcessManager(){
-    processCount = 0;
-    currentProcess = -1;
-}
-ProcessManager::~ProcessManager(){
-
-}
-
-bool ProcessManager::AddProcess(Process* process){
-    if(processCount >= 256)
-        return false;
-
-    processes[processCount++] = process;
-    return true;
-}
-
-CPUState* ProcessManager::Schedule(CPUState* cpu){
-    if(processCount <= 0)
-        return cpu;
-    
-    if(currentProcess >= 0)
-        processes[currentProcess]->cpu = cpu;
-    
-    if(++currentProcess >= processCount)
-        currentProcess %= processCount;
-        
-    return processes[currentProcess]->cpu;
 }
