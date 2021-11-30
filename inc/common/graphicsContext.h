@@ -5,6 +5,7 @@
 #include <boot/bootinfo.h>
 
 namespace UnifiedOS{
+    //Frambuffer
     Boot::Framebuffer* framebuffer;
 }
 

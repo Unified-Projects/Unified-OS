@@ -29,7 +29,7 @@ namespace UnifiedOS{
             ~PS2KeyboardDriver();
 
             //Handler
-            virtual uint64_t HandleInterrupt(uint64_t rsp);
+            virtual void HandleInterrupt(uint64_t rsp);
 
             //Actiavtor
             virtual void Activate();

@@ -51,6 +51,7 @@ namespace UnifiedOS{
 			unsigned int PixelsPerScanLine;
 		};
 
+		//Main boot info header
 		struct BootInfo{
 			Framebuffer* framebuffer;
 			PSF1_FONT* psf1_font;

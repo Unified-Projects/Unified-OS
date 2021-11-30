@@ -6,73 +6,64 @@
 #include <process/process.h>
 #include <common/vector.h>
 
-#define DEFAUL_PROCESS_TICK_COUNT 10
+#include <interrupts/interrupts.h>
+
+#include <paging/paging.h>
 
 namespace UnifiedOS{
     namespace Scheduling{
-        struct ProcessLevel{
-            Processes::Process* processes[256]; //Make dynamic
-            Processes::Process* sleeping[256]; //Make Dynamic
-
-            Vector<Processes::Process*> Awake;
-            Vector<Processes::Process*> Asleep;
-
-            int64_t NextPID = -1;
-            int64_t CurrentPID = -1;
-
-            uint64_t AvialablePID1 = 0x00;
-            uint64_t AvialablePID2 = 0x00;
-            uint64_t AvialablePID3 = 0x00;
-            uint64_t AvialablePID4 = 0x00;
-
-            int64_t GetNextPID();
-            int64_t FreePID(uint64_t PID);
-        };
-
-        class Scheduler{
-        protected:
-            uint64_t TimerTick; //Ticking
-
+        //Scheduler
+        class Scheduler : public Interrupts::InterruptHandler{
+        private:
+            //PID
+            static uint64_t NextPID;
         public:
-            // level: 0 = lowest, kMaxLevel = highest
-            static const int kMaxLevel = 3;
+            //Setup
+            Scheduler(Interrupts::InterruptManager* im, uint64_t entry);
 
-            Scheduler();
+            //To be migrated and re sorted to work with the new system
+            // void Sleep(Processes::Process* process);
+            // int Sleep(uint64_t pid);
+            // void Wakeup(Processes::Process* process, int level = -1);
+            // int Wakeup(uint64_t pid, int level = -1);
 
-            Processes::Process& NewProcess(int level);
-
-            void SwitchProcess(bool CurrentSleep = false);
-            void SwitchProcessF();
-
-            void Sleep(Processes::Process* process);
-            int Sleep(uint64_t pid);
-            void Wakeup(Processes::Process* process, int level = -1);
-            int Wakeup(uint64_t pid, int level = -1);
-
-            void Kill(Processes::Process* process);
-            int Kill(uint64_t pid);
-
-            Processes::Process& CurrentProcess();
+            // void Kill(Processes::Process* process);
+            // int Kill(uint64_t pid);
 
         private:
-            ProcessLevel ProcessLevels[4];
-            Processes::Process* ActiveProcess;
-
-            int CurrentLevel{kMaxLevel};
-            bool LevelChanged{false};
-
-            void ChangeLevelRunning(Processes::Process* process, int level);
+            //Process
+            //NOTE: In the add process add to the AllActive for PID searching
+            Vector<Processes::Process*> Dead;
+            Vector<Processes::Process*> Sleeping;
+            Vector<Processes::Process*> AllActive;
 
         public:
-            void Tick();
+            //Creation
+            Processes::Process* CreateIdleProcess(const char* Name);
+            Processes::Process* NewProcess(const char* Name, uint64_t entry, uint64_t data);
+
+        public:
+            //Add a already made process
+            void AddProcessToQueue(Processes::Process* process);
+
+        public:
+            //Actuall Schedule
+            void Schedule(uint64_t rsp);
+
+            //Interrupts
+            void Tick(uint64_t rsp);
+            void HandleInterrupt(uint64_t rsp);
         };
 
+        //Global
         extern Scheduler* __SCHEDULER__;
 
-        void InitializeProcess();
+        //Setup
+        void IntialiseScheduler(Interrupts::InterruptManager* im, uint64_t entry);
     }
 }
 
-extern "C" void ProcessSwitch(void* NextContext, void* CurrentContext);
+//Task changing
+extern "C" void ProcessSwitch(UnifiedOS::Processes::ProcessContext* context, uint64_t pml4);
 
 #endif

@@ -1,11 +1,13 @@
 #include <common/stdint.h>
 #include <boot/bootinfo.h>
 
-#include <common/stdio.h>
-#include <common/cstring.h>
+#include <pointers.h>
+
+#include <IO/APIC/apic.h> //COMMENT
+#include <smp/smp.h> //COMMENT
 
 #include <gdt/gdt.h>
-#include <gdt/tss.h>
+#include <gdt/tss.h> //COMMENT
 
 #include <paging/PageTableManager.h>
 #include <paging/PageFrameAllocator.h>
@@ -13,8 +15,7 @@
 #include <memory/memory.h>
 #include <memory/heap.h>
 
-//I think shecduiling should be here not process
-#include <process/process.h> //Comment
+#include <process/Scheduler/Scheduler.h> //Comment (INCLUDES PROCESSES)
 
 #include <interrupts/interrupts.h>
 #include <exceptions/exceptions.h>
@@ -31,7 +32,8 @@
 #include <drivers/Input/PS2KeyboardDriver.h>
 #include <drivers/Input/PS2MouseDriver.h>
 
-#include <vector.h> //Comment and remvoe (ingnorable)
+#include <common/stdio.h>
+#include <common/cstring.h>
 
 using namespace UnifiedOS;
 using namespace UnifiedOS::Boot;
@@ -57,146 +59,6 @@ using namespace UnifiedOS::FileSystem;
 //For locking the memory at the kernel
 extern uint64_t _KernelStart;
 extern uint64_t _KernelEnd;
-
-class PrintfKeyboardEventHandler : public PS2KeyboardEventHandler{
-public:
-    void OnKeyDown(char c){
-        if(c < 0x80){
-            // printf("Keyboard 0x");
-            // printf(to_hstring((uint8_t)c));
-            // Next();
-        }
-    }
-};
-
-uint8_t MousePointer[] = {
-    0b10000000, 0b00000000,
-    0b11000000, 0b00000000,
-    0b11100000, 0b00000000,
-    0b11110000, 0b00000000,
-    0b11111000, 0b00000000,
-    0b11111100, 0b00000000,
-    0b11111110, 0b00000000,
-    0b11111111, 0b00000000,
-    0b11111111, 0b10000000,
-    0b11111000, 0b00000000,
-    0b11011000, 0b00000000,
-    0b10011100, 0b00000000,
-    0b00001100, 0b00000000,
-    0b00001100, 0b00000000,
-    0b00000000, 0b00000000,
-    0b00000000, 0b00000000,
-};
-
-class MouseToScreen : public PS2MouseEventHandler{
-    int64_t x, y;
-
-    uint32_t MouseCursorBuffer[16 * 16];
-    uint32_t MouseCursorBufferAfter[16 * 16];
-
-    bool Drawn = false;
-public:
-    MouseToScreen(){
-        x = __BOOT__BootContext__->framebuffer->Width / 2;
-        y = __BOOT__BootContext__->framebuffer->Height / 2;
-    }
-
-    void ClearMouse(){
-        if (!Drawn) return;
-
-        int xMax = 16;
-        int yMax = 16;
-        int differenceX = __BOOT__BootContext__->framebuffer->Width - x;
-        int differenceY = __BOOT__BootContext__->framebuffer->Height - y;
-
-        if (differenceX < 16) xMax = differenceX;
-        if (differenceY < 16) yMax = differenceY;
-
-        for (int yOff = 0; yOff < yMax; yOff++){
-            for (int xOff = 0; xOff < xMax; xOff++){
-                int bit = yOff * 16 + xOff;
-                int byte = bit / 8;
-                if ((MousePointer[byte] & (0b10000000 >> (xOff % 8))))
-                {
-                    if (getPix(x + xOff, y + yOff) == MouseCursorBufferAfter[xOff + yOff *16]){
-                        putPix(x + xOff, y + yOff, MouseCursorBuffer[xOff + yOff * 16]);
-                    }
-                }
-            }
-        }
-    }
-
-    void DrawMouse(){
-        int xMax = 16;
-        int yMax = 16;
-        int differenceX = __BOOT__BootContext__->framebuffer->Width - x;
-        int differenceY = __BOOT__BootContext__->framebuffer->Height - y;
-
-        if (differenceX < 16) xMax = differenceX;
-        if (differenceY < 16) yMax = differenceY;
-
-        for (int yOff = 0; yOff < yMax; yOff++){
-            for (int xOff = 0; xOff < xMax; xOff++){
-                int bit = yOff * 16 + xOff;
-                int byte = bit / 8;
-                if ((MousePointer[byte] & (0b10000000 >> (xOff % 8))))
-                {
-                    MouseCursorBuffer[xOff + yOff * 16] = getPix(x + xOff, y + yOff);
-                    putPix(x + xOff, y + yOff, 0xFFFFFFFF);
-                    MouseCursorBufferAfter[xOff + yOff * 16] = getPix(x + xOff, y + yOff);
-                }
-            }
-        }
-
-        Drawn = true;
-    }
-
-    void OnMouseMove(int xOff, int yOff){
-        ClearMouse();
-        
-        x += xOff;
-        if(x < 0) x = 0;
-        if(x >= __BOOT__BootContext__->framebuffer->Width) x = __BOOT__BootContext__->framebuffer->Width - 1;
-
-        y += yOff;
-        if(y < 0) y = 0;
-        if(y >= __BOOT__BootContext__->framebuffer->Height) y = __BOOT__BootContext__->framebuffer->Height - 1;
-
-        DrawMouse();
-    }
-
-    void OnMouseDown(){
-      
-    }
-
-    void OnMouseUp(){
-      
-    }
-};
-
-// void sysprintf(const char* str){
-//     asm("int $0x80" : : "a" (4), "b" (str));
-// }
-//
-// void TaskA(){
-//     while (true)
-//     {
-//         printf("Tast A Test\n");
-//     }
-// }
-//
-// void TaskB(){
-//     while (true)
-//     {
-//         sysprintf("Task B Test\n");
-//     }
-// }
-
-void KernelSecondStage(){
-    while(true){
-        printf("Test\n");
-    }
-}
 
 void InitialisePaging(){
     //Entries (Pages)
@@ -241,54 +103,54 @@ void InitialisePaging(){
     asm("mov %0, %%cr3" : : "r" (PML4));
 }
 
-inline void WaitSignal() {
-    IO::Port8Bit CommandPort(0x64);
-    int timeout = 10000;
-    while (timeout--)
-        if ((CommandPort.Read() & 0x2) != 0x2)
-            return;
-}
-
-template <bool isMouse> inline void WaitData() {
-    IO::Port8Bit CommandPort(0x64);
-    int timeout = 10000;
-    while (timeout--)
-        if ((CommandPort.Read() & 0x21) == (isMouse ? 0x21 : 0x1))
-            return;
-}
-
-void PS2Init(){
-    IO::Port8Bit DataPort(0x60);
-    IO::Port8Bit CommandPort(0x64);
-    IO::Port8Bit PITMaster(0x20);
-
-    // Start by disabling both ports
-    WaitSignal();
-    CommandPort.Write(0xAD);
-    WaitSignal();
-    CommandPort.Write(0xA7);
-
-    DataPort.Read(); // Discard any data
-
-    WaitSignal();
-    CommandPort.Write(0x20);
-    WaitData<false>();
-    uint8_t status = PITMaster.Read();
-
-    WaitSignal();
-    CommandPort.Write(0xAE);
-    WaitSignal();
-    CommandPort.Write(0xA8);
-
-    // Enable interrupts, enable keyboard and mouse clock
-    status = ((status & ~0x30) | 3);
-    WaitSignal();
-    CommandPort.Write(0x60);
-    WaitSignal();
-    CommandPort.Write(status);
-    WaitData<false>();
-    DataPort.Read();
-}
+// inline void WaitSignal() {
+//     IO::Port8Bit CommandPort(0x64);
+//     int timeout = 10000;
+//     while (timeout--)
+//         if ((CommandPort.Read() & 0x2) != 0x2)
+//             return;
+// }
+//
+// template <bool isMouse> inline void WaitData() {
+//     IO::Port8Bit CommandPort(0x64);
+//     int timeout = 10000;
+//     while (timeout--)
+//         if ((CommandPort.Read() & 0x21) == (isMouse ? 0x21 : 0x1))
+//             return;
+// }
+//
+// void PS2Init(){
+//     IO::Port8Bit DataPort(0x60);
+//     IO::Port8Bit CommandPort(0x64);
+//     IO::Port8Bit PITMaster(0x20);
+//
+//     // Start by disabling both ports
+//     WaitSignal();
+//     CommandPort.Write(0xAD);
+//     WaitSignal();
+//     CommandPort.Write(0xA7);
+//
+//     DataPort.Read(); // Discard any data
+//
+//     WaitSignal();
+//     CommandPort.Write(0x20);
+//     WaitData<false>();
+//     uint8_t status = PITMaster.Read();
+//
+//     WaitSignal();
+//     CommandPort.Write(0xAE);
+//     WaitSignal();
+//     CommandPort.Write(0xA8);
+//
+//     // Enable interrupts, enable keyboard and mouse clock
+//     status = ((status & ~0x30) | 3);
+//     WaitSignal();
+//     CommandPort.Write(0x60);
+//     WaitSignal();
+//     CommandPort.Write(status);
+//     WaitData<false>();
+//     DataPort.Read();
+// }
 
 void InitVolumes(DriverManager* driverM){
 
@@ -315,6 +177,22 @@ void InitVolumes(DriverManager* driverM){
     }
 }
 
+void KernelStage2(){
+    //Volumes
+    InitVolumes(Pointers::Drivers::DriverManager);
+    //GP FAULT CAUSED HERE... ^
+    
+    // PS2Init();
+
+    printf("Stage 2 Entry Complete\n");
+
+    while (true)
+    {
+        /* code */
+    }
+    
+}
+
 extern "C" void kernelMain(BootInfo* bootInfo)
 {
     __BOOT__BootContext__ = bootInfo;
@@ -322,22 +200,32 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     //Blank Screen
     Clear(0x00);
 
+    //Detect SMP cores test
+    //I Dont know why (I think a delay effect) but whenever I remove the prints
+    //It stops working???
+    printf("SMP APIC: \n");
+    IO::APIC::ReadAPIC();
+    printf("Found ");
+    printf(to_string((int64_t)IO::APIC::CoreCount));
+
+    printf(", IOAPIC ");
+    printf(to_hstring(IO::APIC::IOAPIC_PTR));
+
+    printf(", LAPIC ");
+    printf(to_hstring(IO::APIC::LAPIC_PTR));
+
+    printf(", Processor IDs: ");
+    for(int i = 0; i < IO::APIC::CoreCount; i++){
+        printf(to_string((int64_t)IO::APIC::LAPIC_IDs[i]));
+        printf(" ");
+    }
+    printf("\n");
+
     //Memory
     InitialisePaging();
 
-    //TSS
-    TSS tss; //COMMENT //Make Global to be modified by the process
-
     //GDT
-    GDT gdtTable = DefaultGDT;
-    gdtTable.TSS.Base0 = ((uint32_t)&tss) & 0xFFFF;
-    gdtTable.TSS.Base1 = (((uint32_t)&tss) >> 16) & 0xFF;
-    gdtTable.TSS.Base2 = (((uint32_t)&tss) >> 24) & 0xFF;
-
-    GDTDescriptor gdt;
-    gdt.Size = sizeof(GDT) - 1;
-    gdt.Offset = (uint64_t)&gdtTable;
-    LoadGDT(&gdt);
+    LoadGDT(&__GDTDesc);
 
     //Heap
     //We use a high address to not interrupt other addresses
@@ -346,78 +234,82 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     //So its not too much of an issue.
     InitialiseHeap((void*)0x0000100000000000, 0xFF);
 
-    //Processes
-    //COMMENTS NEEDED (ALSO RECODE IT ALL!)
-    Scheduling::InitializeProcess();
-    // Process& proctest = Scheduling::__SCHEDULER__->NewProcess(3);
-    // proctest.SetLevel(3);
-    // proctest.ContextCreation((uint64_t)TaskA, 0);
-    // proctest.SetRunning(true);
-
-    //TYPES
-    //User space (NEED TO IMPLEMENT) (https://wiki.osdev.org/Getting_to_Ring_3)
-    //    This will also need to link to system calls for userspace to reach
-    //Kernel space (This)
-
-    //NOTE FOR MULTITASKING IMPLEMENTATIONS
-    //      NEEDED
-    //Implement a TSS (Task State Segment) (https://wiki.osdev.org/TSS) and send to GDT
-    //Create a better task switching that does not rely on interrupts but uses a tick system where there are 10 ticks per task
-    //
-    //
-    //      Would be nice if
-    //Threading - Threads per processes
-
     //Interrupts (Default)
-    InterruptManager interrupts;
-
-    //ERRORS WITH PIT MAPPING ON MODERN HARDWARE
-    //APIC MAY FIX THESE ISSUES WHO KNOWS?
+    Pointers::Interrupts::Interrupts = new InterruptManager();
 
     //Syscalls
-    SyscallHandler syscalls(&interrupts);
+    Pointers::Interrupts::Syscalls::Syscalls = new SyscallHandler(Pointers::Interrupts::Interrupts);
 
     //Intialise Exceptions
-    ExceptionManager Exceptions(&interrupts);
+    Pointers::Exceptions::Exceptions = new ExceptionManager(Pointers::Interrupts::Interrupts);
 
     //Drivers
-    DriverManager driverManager;
+    Pointers::Drivers::DriverManager = new DriverManager();
 
     //Devices
-    DeviceManager devices(&driverManager);
+    Pointers::Devices::DeviceManager = new DeviceManager(Pointers::Drivers::DriverManager);
 
-    //NOTE MCFG IN ACPI NEEDS TO BE FIXED TO FIND CORRECT ENTRIES!!!
+    // //Keyboard Driver MAKE USING new
+    // PrintfKeyboardEventHandler KeyboardHandler;
+    // PS2KeyboardDriver keyboard(Pointers::Interrupts::Interrupts, &KeyboardHandler);
+    // Pointers::Drivers::DriverManager->AddDriver(&keyboard);
 
-    //Keyboard Driver
-    PrintfKeyboardEventHandler KeyboardHandler;
-    PS2KeyboardDriver keyboard(&interrupts, &KeyboardHandler);
-    driverManager.AddDriver(&keyboard);
-
-    //Mouse Driver
-    MouseToScreen MouseHandler;
-    PS2MouseDriver mouse(&interrupts, &MouseHandler);
-    driverManager.AddDriver(&mouse);
+    // //Mouse Driver MAKE USING new
+    // MouseToScreen MouseHandler;
+    // PS2MouseDriver mouse(Pointers::Interrupts::Interrupts, &MouseHandler);
+    // Pointers::Drivers::DriverManager->AddDriver(&mouse);
 
     //Activate Drivers
-    driverManager.ActivateAll();
-    PS2Init();
+    //SETUP NOTE: Make it so when a driver is called to activate it check if already ative and ignores if active
+    //To allow for more drivers to be loaded after this boot
+    Pointers::Drivers::DriverManager->ActivateAll();
 
     //PIT
-    __TIMER__PIT__ = new PIT(&interrupts);
-    __TIMER__PIT__->SetFrequency(100); //INACURRATE
+    __TIMER__PIT__ = new PIT(Pointers::Interrupts::Interrupts);
+    __TIMER__PIT__->SetFrequency(1000); //INACURRATE
+
+    //ERRORS WITH PIT MAPPING ON MODERN HARDWARE
+
+    //Dissable PIC
+    Pointers::Interrupts::Interrupts->DissablePIC();
+
+    //APIC NOTE
+    //Sometimes the interrupts do not register which is an issue (With PIT)
+    //As this will cause the smp to fail to initialise
+    //However this only seems to be with qemu not real hardware
+
+    //APIC Inits
+    //Spurious Interrupt
+    IO::APIC::SpuriousInterrupHandler* SpuriousInterupts = new IO::APIC::SpuriousInterrupHandler(Pointers::Interrupts::Interrupts);
+    IO::APIC::LApicInit();
+    IO::APIC::IntitateIO();
+
+    IO::APIC::MapLegacyIRQ(0x01); //PS2 Keyboard
+    IO::APIC::MapLegacyIRQ(0x0C); //PS2 Mouse
 
     //Interrupts activation
-    interrupts.Activate();
+    Pointers::Interrupts::Interrupts->Activate();
 
-    //Volumes
-    InitVolumes(&driverManager);
-    //GP FAULT CAUSED HERE... ^
+    //SMP
+    //Will now boot all the cpu's that are not booted.
+    //64-Bit gets toggled with gdt
+    //Interrupts are synced
+    SMP::Intitialise();
+    printf("All ");
+    printf(to_string((int64_t)SMP::ActiveCPUs));
+    printf(" Have Been Booted!\n\n");
 
-    //Intialise Done
-    printf("Done\n");
+    //Processes
+    Scheduling::IntialiseScheduler(Pointers::Interrupts::Interrupts, (uint64_t)KernelStage2); //CAUSES ISSUES (REAL HARDWARE Div by zero Exception)
+    // Process* proctest = Scheduling::__SCHEDULER__->NewProcess("TestProcess", (uint64_t)TaskA, 0);
+
+        //TYPES
+            //User space (NEED TO IMPLEMENT) (https://wiki.osdev.org/Getting_to_Ring_3)
+            //    This will also need to link to system calls for userspace to reach
+            //Kernel space (This)
 
     while(true){
         // printf("Task Kernel...\n");
-        asm("hlt"); //Saves performance
+        // asm("hlt"); //Saves performance
     }
 }

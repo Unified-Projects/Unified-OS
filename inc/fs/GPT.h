@@ -6,9 +6,10 @@
 namespace UnifiedOS{
     namespace FileSystem{
         namespace GPT{
-            #define GPT_HEADER_SIGNATURE_LITTLE_ENDIAN 0x5452415020494645
-            #define GPT_HEADER_SIGNATURE_BIG_ENDIAN 0x4546492050415254
+            #define GPT_HEADER_SIGNATURE_BIG_ENDIAN 0x5452415020494645
+            #define GPT_HEADER_SIGNATURE_LITTLE_ENDIAN 0x4546492050415254
 
+            //Header of the GPT partition
             struct GPTHeader{
                 uint64_t Signature;
                 uint32_t Revision;
@@ -26,6 +27,7 @@ namespace UnifiedOS{
                 uint32_t PartEntriesCRC;
             } __attribute__((packed));
 
+            //Entries in the GPT
             struct GPTPartitonEntry{
                 uint8_t TypeGUID[16];
                 uint8_t PartitionGUID[16];
@@ -35,6 +37,7 @@ namespace UnifiedOS{
                 uint8_t Name[72];
             } __attribute__((packed));
 
+            //Read the GPT
             int Parse(DiskDevice* disk);
         }
     }

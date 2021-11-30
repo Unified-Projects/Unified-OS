@@ -28,17 +28,15 @@ PS2KeyboardDriver::~PS2KeyboardDriver(){
     
 }
 
-uint64_t PS2KeyboardDriver::HandleInterrupt(uint64_t rsp){
+void PS2KeyboardDriver::HandleInterrupt(uint64_t rsp){
     uint8_t key = dataPort.Read(); //Read the scancode
 
     if(Handler == 0){ //If there is no handler end the interrupt
-        return rsp;
+        return;
     }
 
     //Send the key to the handler
     Handler->OnKeyDown(key);
-
-    return rsp;
 }
 void PS2KeyboardDriver::Activate(){
     // while (commandPort.Read() & 0x01)

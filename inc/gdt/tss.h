@@ -5,6 +5,9 @@
 
 namespace UnifiedOS{
     namespace GlobalDescriptorTable{
+        struct GDTDescriptor;
+
+        //Task Segment
         struct TSS {
             uint32_t Reserved __attribute__((aligned(16)));
             uint64_t Rsp0;
@@ -23,9 +26,11 @@ namespace UnifiedOS{
             uint32_t IopbOffset;
         } __attribute__((packed));
 
-        void InitTSS(TSS* tss);
+        //TSS setup
+        void InitTSS(TSS* tss, GDTDescriptor* gdt);
 
-        inline void SetKernelStack(TSS* tss, uint64_t stack);
+        //Kernel stack on the tss
+        void SetKernelStack(TSS* tss, uint64_t stack);
     }
 }
 

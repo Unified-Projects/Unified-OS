@@ -4,8 +4,6 @@
 #include <common/stdint.h>
 #include <IO/port.h>
 
-#include <process/scheduler/Scheduler.h>
-
 namespace UnifiedOS{
     namespace Interrupts{
         //For the handler
@@ -34,7 +32,13 @@ namespace UnifiedOS{
             uint64_t rsp;
             uint64_t ss;
         };
-        
+
+        //This is passed into assembly when loaded to the system
+        struct InterruptDescriptorTablePointer
+        {
+            uint16_t Limit;
+            uint64_t Offset;
+        } __attribute__((packed));
 
         class InterruptHandler{
         protected:  
@@ -47,7 +51,7 @@ namespace UnifiedOS{
             ~InterruptHandler();
         public:
             //This gets run when the interrupt number is called
-            virtual uint64_t HandleInterrupt(uint64_t rsp);
+            virtual void HandleInterrupt(uint64_t rsp);
         };
 
         class InterruptManager{
@@ -74,16 +78,6 @@ namespace UnifiedOS{
 
             //The descriptors that get loaded (256 max)
             static GateDescriptor interruptDescriptorTable[256];
-
-            //This is passed into assembly when loaded to the system
-            struct InterruptDescriptorTablePointer
-            {
-                uint16_t Limit;
-                uint64_t Offset;
-            } __attribute__((packed));
-
-            //What gets loaded to the system
-            static InterruptDescriptorTablePointer idt_pointer;
 
             //Not important, well quite useless just a definition of 0x20
             uint16_t hardwareInterruptOffset;
@@ -114,6 +108,8 @@ namespace UnifiedOS{
 
                 static void HandleInterruptRequest128();
 
+                static void HandleInterruptRequest253();
+
                 static void HandleException0();
                 static void HandleException1();
                 static void HandleException2();
@@ -137,16 +133,17 @@ namespace UnifiedOS{
             //
 
             //Static Handler (Ran in assembly on an interrupt), will call DoHandleInterrupt
-            static uint64_t HandleInterrupt(uint8_t interrupt, uint64_t rsp);
+            static void HandleInterrupt(uint8_t interrupt, uint64_t rsp);
 
             //Calls for the specific handler
-            uint64_t DoHandleInterrupt(uint8_t interrupt, uint64_t rsp);
+            void DoHandleInterrupt(uint8_t interrupt, uint64_t rsp);
 
             //Port for the PIC
             IO::Port8BitSlow PICMasterCommandPort;
             IO::Port8BitSlow PICMasterDataPort;
             IO::Port8BitSlow PICSlaveCommandPort;
             IO::Port8BitSlow PICSlaveDataPort;
+            bool PICToggled = true;
 
         public:
             //Constructors
@@ -159,7 +156,12 @@ namespace UnifiedOS{
             //Activate/Deactivate the interrupts
             void Activate();
             void Deactivate();
+
+            void DissablePIC();
         };
+
+        //What gets loaded to the system and global for smp
+        extern InterruptDescriptorTablePointer idt_pointer;
     }
 }
 

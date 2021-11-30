@@ -42,7 +42,7 @@ void PIT::SetDivistor(uint16_t divisor){
     //Pass divisor into port
     PITCommandPort.Write(0x36);
     PITDataPort0.Write((uint8_t)(divisor & 0x00ff));
-    PITDataPort0.Write((uint8_t)((divisor & 0xff00) >> 8));
+    PITDataPort0.Write((uint8_t)((divisor) >> 8));
 }
 uint64_t PIT::GetFreqency(){
     return BaseFrequency / Divisor; //Modify with divisor
@@ -52,11 +52,9 @@ void PIT::SetFrequency(uint64_t frequency){
 }
 
 //Interrutp Handler (Ticking)
-uint64_t PIT::HandleInterrupt(uint64_t rsp){
+void PIT::HandleInterrupt(uint64_t rsp){
     //Will increase Time since boot the tick of a modified frequency
     TimeSinceBoot += 1 / (double)GetFreqency();
-
-    return rsp;
 }
 
 //Global Timer

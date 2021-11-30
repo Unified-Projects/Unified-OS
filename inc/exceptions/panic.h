@@ -5,7 +5,10 @@
 
 namespace UnifiedOS{
     namespace Exceptions{
+        //Either panic (On purpose (Kernel))
         void Panic(const char* message);
+
+        //Exception (kill a process)
         void Exception(uint8_t interrupt);
     }
 }

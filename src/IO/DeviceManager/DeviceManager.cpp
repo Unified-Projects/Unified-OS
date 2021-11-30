@@ -11,8 +11,6 @@ using namespace UnifiedOS::Boot::ACPI;
 using namespace UnifiedOS::Devices;
 using namespace UnifiedOS::Devices::ACPI;
 
-#include <common/stdio.h>
-
 void DeviceManager::LocateACPI(){
     //Headers
     xsdt = (SDTHeader*)(__BOOT__BootContext__->rsdp->XSDTAddress);

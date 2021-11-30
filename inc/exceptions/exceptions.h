@@ -14,7 +14,7 @@ namespace UnifiedOS{
             ExceptionHandler(uint8_t Exception, Interrupts::InterruptManager* manager);
             ~ExceptionHandler();
 
-            virtual uint64_t HandleInterrupt(uint64_t rsp);
+            virtual void HandleInterrupt(uint64_t rsp);
         };
 
         //For intitlisation and can implement custom actions towards exceptions

@@ -9,7 +9,7 @@ using namespace UnifiedOS;
 using namespace UnifiedOS::Boot;
 using namespace UnifiedOS::Exceptions;
 
-//NOTE CREATE A HANDLER FOR THIS SO IT KILLS A PROGRAM INSTEAD OF A FULL KERNEL PANIC
+//NOTE CREATE A HANDLER FOR THIS SO IT KILLS A PROCESS INSTEAD OF A FULL KERNEL PANIC (Unless its a kernel process of course)
 
 //Image (For When Img file not loaded)
 int ErrImg[18][54] = {
@@ -115,6 +115,11 @@ void Exceptions::Panic(const char* PanicMessage){
     SetPosX(Sub2XOffset);
     printf("We don't know what caused it.");
     Next();
+
+    while (true)
+    {
+        // asm("hlt");
+    }
 }
 
 //Panics from an interrupt
@@ -164,4 +169,9 @@ void Exceptions::Exception(uint8_t interrupt){
     SetPosX(Sub2XOffset);
     printf("We don't know what caused it.");
     Next();
+
+    while (true)
+    {
+        // asm("hlt");
+    }
 }

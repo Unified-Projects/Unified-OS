@@ -86,19 +86,19 @@ void PS2MouseDriver::Activate(){
 
 bool Skip = true;
 
-uint64_t PS2MouseDriver::HandleInterrupt(uint64_t rsp){
-    if(Skip) {Skip = false; return rsp;} //Skip first packet
+void PS2MouseDriver::HandleInterrupt(uint64_t rsp){
+    if(Skip) {Skip = false; return;} //Skip first packet
 
     //Read status
     uint8_t status = commandPort.Read();
     if (!(status & 0x20))
-        return rsp; //If not ready return
+        return; //If not ready return
 
     //Read Buffer at current offset
     buffer[offset] = dataPort.Read(); //We dont want to skip this if there is no handler
     
     if(Handler == 0) //If handler does not exist leave
-        return rsp;
+        return;
 
     offset = (offset + 1) % 3; //Increase offset while keeping it less than three
 
@@ -121,6 +121,4 @@ uint64_t PS2MouseDriver::HandleInterrupt(uint64_t rsp){
         }
         buttons = buffer[0]; //Load the buttons from buffer for next comparison
     }
-    
-    return rsp;
 }

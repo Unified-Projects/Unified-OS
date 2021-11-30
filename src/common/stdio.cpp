@@ -119,6 +119,13 @@ void UnifiedOS::SetPosY(uint32_t y){
     CursorY = y;
 }
 
+uint32_t UnifiedOS::GetXPos(){
+    return CursorX;
+}
+uint32_t UnifiedOS::GetYPos(){
+    return CursorY;
+}
+
 // void printfHex(uint8_t val){
 //     char* ret = "0x  ";
 //     char* hex = "0123456789ABCDEF";

@@ -13,22 +13,27 @@ namespace UnifiedOS{
             int nextPartitionNumber = 0;
 
             char* DeviceName;
-        public:
+
+        private: //Direct Link with port (Will not work with Malloced buffers because of mapping)
             //8 x 4KiB buffers
             void* Buffer[8];
-
-            DiskDevice();
-            
-            //Setup Partitions
-            int InitializePartitions();
 
             //Reading blocks (512Bytes)
             virtual int ReadDiskBlock(uint64_t lba, size_t count, void* buffer);
             virtual int WriteDiskBlock(uint64_t lba, size_t count, void* buffer);
 
+        public:
+            DiskDevice();
+            
+            //Setup Partitions
+            int InitializePartitions();
+
             //Reading bytes
             int Read(size_t off, size_t size, uint8_t* buffer);
             int Write(size_t off, size_t size, uint8_t* buffer);
+
+            int ReadBlocks(uint64_t lba, size_t count, void* buffer);
+            int WriteBlocks(uint64_t lba, size_t count, void* buffer);
 
             //Deconstructor
             ~DiskDevice();

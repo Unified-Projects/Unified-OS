@@ -4,6 +4,9 @@
 #include <common/stdio.h>
 #include <common/cstring.h>
 
+#include <IO/APIC/apic.h>
+#include <process/Scheduler/Scheduler.h>
+
 using namespace UnifiedOS;
 using namespace UnifiedOS::Interrupts;
 using namespace UnifiedOS::Paging;
@@ -20,7 +23,7 @@ InterruptHandler::~InterruptHandler(){
         interruptManager->handlers[interrupt] = 0;
     }
 }
-uint64_t InterruptHandler::HandleInterrupt(uint64_t rsp){
+void InterruptHandler::HandleInterrupt(uint64_t rsp){
     if(interrupt == 0x21){
         printf("Keyboard\n");
     }
@@ -31,7 +34,7 @@ uint64_t InterruptHandler::HandleInterrupt(uint64_t rsp){
 
 UnifiedOS::Interrupts::InterruptManager::GateDescriptor UnifiedOS::Interrupts::InterruptManager::interruptDescriptorTable[256];
 UnifiedOS::Interrupts::InterruptManager* UnifiedOS::Interrupts::InterruptManager::ActiveInterruptManager = 0;
-UnifiedOS::Interrupts::InterruptManager::InterruptDescriptorTablePointer UnifiedOS::Interrupts::InterruptManager::idt_pointer = InterruptDescriptorTablePointer();
+UnifiedOS::Interrupts::InterruptDescriptorTablePointer UnifiedOS::Interrupts::idt_pointer = InterruptDescriptorTablePointer();
 
 ///
 
@@ -86,7 +89,7 @@ InterruptManager::InterruptManager()
     SetInterruptDescriptorTableEntry(0, (uint64_t)InterruptIgnore, 0x08, IDT_INTERRUPT_GATE);
     handlers[0] = 0;
 
-    //Entries
+    //Normal Interrupts/Exceptions
         SetInterruptDescriptorTableEntry(0x00, (uint64_t)HandleException0, 0x08, IDT_INTERRUPT_GATE);
         SetInterruptDescriptorTableEntry(0x01, (uint64_t)HandleException1, 0x08, IDT_INTERRUPT_GATE);
         SetInterruptDescriptorTableEntry(0x02, (uint64_t)HandleException2, 0x08, IDT_INTERRUPT_GATE);
@@ -107,7 +110,32 @@ InterruptManager::InterruptManager()
         SetInterruptDescriptorTableEntry(0x11, (uint64_t)HandleException17, 0x08, IDT_INTERRUPT_GATE);
         SetInterruptDescriptorTableEntry(0x12, (uint64_t)HandleException18, 0x08, IDT_INTERRUPT_GATE);
         SetInterruptDescriptorTableEntry(0x13, (uint64_t)HandleException19, 0x08, IDT_INTERRUPT_GATE);
+    
+        SetInterruptDescriptorTableEntry(0x80, (uint64_t)HandleInterruptRequest128, 0x08, IDT_INTERRUPT_GATE /*Change to 0xEE*/); //Syscall
+    
+        SetInterruptDescriptorTableEntry(0xFD, (uint64_t)HandleInterruptRequest253, 0x08, IDT_INTERRUPT_GATE);
+    //
+    
+    //Loads the interrupts
+    asm ("lidt %0" : : "m" (idt_pointer));
+    
+    //PIC intialiser
+    PICMasterCommandPort.Write(0x11);
+    PICSlaveCommandPort.Write(0x11);
 
+    PICMasterDataPort.Write(0x20);
+    PICSlaveDataPort.Write(0x28);
+
+    PICMasterDataPort.Write(0x04);
+    PICMasterDataPort.Write(0x02);
+
+    PICMasterDataPort.Write(0x01);
+    PICSlaveDataPort.Write(0x01);
+
+    PICMasterDataPort.Write(0x00);
+    PICSlaveDataPort.Write(0x00);
+
+    //Hardware Interrupts
         SetInterruptDescriptorTableEntry(hardwareInterruptOffset + 0x00, (uint64_t)HandleInterruptRequest0, 0x08, IDT_INTERRUPT_GATE);
         SetInterruptDescriptorTableEntry(hardwareInterruptOffset + 0x01, (uint64_t)HandleInterruptRequest1, 0x08, IDT_INTERRUPT_GATE);
         SetInterruptDescriptorTableEntry(hardwareInterruptOffset + 0x02, (uint64_t)HandleInterruptRequest2, 0x08, IDT_INTERRUPT_GATE);
@@ -124,22 +152,17 @@ InterruptManager::InterruptManager()
         SetInterruptDescriptorTableEntry(hardwareInterruptOffset + 0x0D, (uint64_t)HandleInterruptRequest13, 0x08, IDT_INTERRUPT_GATE);
         SetInterruptDescriptorTableEntry(hardwareInterruptOffset + 0x0E, (uint64_t)HandleInterruptRequest14, 0x08, IDT_INTERRUPT_GATE);
         SetInterruptDescriptorTableEntry(hardwareInterruptOffset + 0x0F, (uint64_t)HandleInterruptRequest15, 0x08, IDT_INTERRUPT_GATE);
-        SetInterruptDescriptorTableEntry(0x80, (uint64_t)HandleInterruptRequest128, 0x8, IDT_INTERRUPT_GATE /*Change to 0xEE*/); //Syscall
     //
-    
-    //Loads the interrupts
-    asm ("lidt %0" : : "m" (idt_pointer));
-    
-    //PIC intialiser
-    // uint8_t MMask, SMask;
+}
 
-    // MMask = PICMasterDataPort.Read();
-    // SMask = PICSlaveDataPort.Read();
+//Dissables / Masks PIC Interrupts
+void InterruptManager::DissablePIC(){
     PICMasterCommandPort.Write(0x11);
     PICSlaveCommandPort.Write(0x11);
 
-    PICMasterDataPort.Write(0x20);
-    PICSlaveDataPort.Write(0x28);
+    //Offset interrupts
+    PICMasterDataPort.Write(0xF0);
+    PICSlaveDataPort.Write(0xF0);
 
     PICMasterDataPort.Write(0x04);
     PICMasterDataPort.Write(0x02);
@@ -147,11 +170,11 @@ InterruptManager::InterruptManager()
     PICMasterDataPort.Write(0x01);
     PICSlaveDataPort.Write(0x01);
 
-    PICMasterDataPort.Write(0x00);
-    PICSlaveDataPort.Write(0x00);
+    //Mask section
+    PICMasterDataPort.Write(0xFF);
+    PICSlaveDataPort.Write(0xFF);
 
-    // PICMasterDataPort.Write(MMask);
-    // PICSlaveDataPort.Write(SMask);
+    PICToggled = false;
 }
 
 InterruptManager::~InterruptManager(){
@@ -178,43 +201,44 @@ void InterruptManager::Deactivate(){
 }
 
 //Called by the interrupt
-uint64_t InterruptManager::HandleInterrupt(uint8_t interrupt, uint64_t rsp){
+void InterruptManager::HandleInterrupt(uint8_t interrupt, uint64_t rsp){
     if(ActiveInterruptManager != 0){ //If there is an active interrupt
-        return ActiveInterruptManager->DoHandleInterrupt(interrupt, rsp); //Return the stack pointer (Context Switching (Multiprocessing))
+        ActiveInterruptManager->DoHandleInterrupt(interrupt, rsp); //Return the stack pointer (Context Switching (Multiprocessing))
     }
-
-    return rsp; //Otherwise just return the stack
 }
 
-bool GP = false;
-
 //Main interupt handler
-uint64_t InterruptManager::DoHandleInterrupt(uint8_t interrupt, uint64_t rsp){
-    if(handlers[interrupt] != 0){ //If a handler exists
-        rsp = handlers[interrupt]->HandleInterrupt(rsp); //Call it
+void InterruptManager::DoHandleInterrupt(uint8_t interrupt, uint64_t rsp){
+    //If it is a hardware interrupt we need to tell the PIC its ended
+    if((hardwareInterruptOffset <= interrupt && interrupt <= hardwareInterruptOffset + 16) || (interrupt == 0xfd) || (interrupt == 0x80))
+    {
+        if(PICToggled && (hardwareInterruptOffset <= interrupt && interrupt <= hardwareInterruptOffset + 16)){ //PIC End of itnterrupts
+            if(hardwareInterruptOffset + 8 <= interrupt)
+                PICSlaveCommandPort.Write(0x20); //EOI
+            PICMasterCommandPort.Write(0x20); //EOI
+        }
+        else{ //APIC end of interrupts
+            LocalAPICEOI();
+            // printf("Interrupt\n");
+        }
     }
-    else if(interrupt != hardwareInterruptOffset)
+
+    if(handlers[interrupt] != 0){ //If a handler exists
+        handlers[interrupt]->HandleInterrupt(rsp); //Call it
+    }
+    else if (interrupt != hardwareInterruptOffset)
     { //if an interrupt is not handled here print it
         printf("Unhandled Interrupt ");
         printf(to_hstring(interrupt));
         printf("\n");
         //NOTE
         //Dissable in future when i have a graphical display as will be useless
+
+        return;
     }
 
-    //TaskSwitching
-    if(interrupt == hardwareInterruptOffset){
-        Scheduling::__SCHEDULER__->Tick();
+    //Scheduler Ticking
+    if(interrupt == hardwareInterruptOffset){ //0x20
+        Scheduling::__SCHEDULER__->Tick(rsp);
     }
-    
-    //If it is a hardware interrupt we need to tell the PIC its ended
-    if(hardwareInterruptOffset <= interrupt && interrupt <= hardwareInterruptOffset + 16)
-    {
-        if(hardwareInterruptOffset + 8 <= interrupt)
-            PICSlaveCommandPort.Write(0x20); //EOI
-        PICMasterCommandPort.Write(0x20); //EOI
-    }
-
-    //Return the stack pointer
-    return rsp;
 }

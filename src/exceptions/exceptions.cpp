@@ -14,7 +14,7 @@ ExceptionHandler::~ExceptionHandler(){
 
 }
 
-uint64_t ExceptionHandler::HandleInterrupt(uint64_t rsp){
+void ExceptionHandler::HandleInterrupt(uint64_t rsp){
     Exception(interrupt); //Just Panic
     
     //Then Stop the computer

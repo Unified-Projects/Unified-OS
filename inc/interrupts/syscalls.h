@@ -4,22 +4,25 @@
 #include <common/stdint.h>
 #include <interrupts/interrupts.h>
 
-#define SYSCALL_COUNT 2
+#define SYSCALL_COUNT 3
 
 namespace UnifiedOS{
     namespace Interrupts{
         namespace Syscalls{
-            class SyscallHandler;
-
+            //Sysycall entry
             typedef uint64_t (*Syscall)(uint64_t rsp);
 
+            //Syscall
             class SyscallHandler : public InterruptHandler{
             public:
+                //Each syscall
                 static Syscall SyscallResults[SYSCALL_COUNT];
 
+                //Setup
                 SyscallHandler(InterruptManager* im);
 
-                virtual uint64_t HandleInterrupt(uint64_t rsp);
+                //Interrup Handler
+                virtual void HandleInterrupt(uint64_t rsp);
             };
         }
     }

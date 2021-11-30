@@ -32,6 +32,14 @@ _ZN9UnifiedOS10Interrupts16InterruptManager%2HandleInterruptRequest%1Ev:
     jmp int_bottom
 %endmacro
 
+; Scheduler
+%macro HandleSchedulerInterruptRequest 2
+global _ZN9UnifiedOS10Interrupts16InterruptManager%2HandleInterruptRequest%1Ev
+_ZN9UnifiedOS10Interrupts16InterruptManager%2HandleInterruptRequest%1Ev:
+    mov byte [interruptnumber], %1
+    jmp int_bottom
+%endmacro
+
 ; Setup Exceptions
 HandleException 0, 16
 HandleException 1, 16
@@ -72,6 +80,8 @@ HandleInterruptRequest 13, 24
 HandleInterruptRequest 14, 24
 HandleInterruptRequest 15, 24
 HandleInterruptRequest 49, 24
+
+HandleSchedulerInterruptRequest 253, 25
 
 ; Syscalls
 HandleSyscallInterruptRequest 128, 25
@@ -115,21 +125,28 @@ HandleSyscallInterruptRequest 128, 25
 %endmacro
 
 int_bottom:
+    cli
     ;Load registers to stack
     pushaq
 
     ; call C++ Handler
     mov rdi, [interruptnumber]
     mov rsi, rsp
+
+    xor rdx, rdx
+    xor rbp, rbp
+
     call _ZN9UnifiedOS10Interrupts16InterruptManager15HandleInterruptEhy
 
     ; add rsp, 5
-    mov rsp, rax; Switch the stack
+    ; mov rsp, rax; Switch the stack
 
     ;Remove from stack in reverse order to adding
     popaq
 
     ; add rsp, 4
+
+    sti
 
 ; This is the entry for the ignore interrupt (will just return)
 global _ZN9UnifiedOS10Interrupts16InterruptManager15InterruptIgnoreEv

@@ -1,313 +1,219 @@
 #include <process/Scheduler/Scheduler.h>
 #include <memory/heap.h>
+#include <IO/APIC/apic.h>
+#include <IO/CPU/CPU.h>
+#include <smp/smp.h>
+#include <common/cstring.h>
+#include <IO/spinlock.h>
+#include <gdt/tss.h>
+
+#include <paging/PageTableManager.h>
+
+#include <common/stdio.h>
+#include <common/cstring.h>
 
 using namespace UnifiedOS;
 using namespace UnifiedOS::Scheduling;
 using namespace UnifiedOS::Processes;
 
-//Notes:
-//  Implement a vectoring system for all the processes
-//  Create a vector for each process layer to be able to add processes and remove seamlessly
-//  Create a vector for all tasks to allow Kill, Sleep and Wakup to be able to rely on tasks using a PID over all layers
-// 
+bool SchedulerReady = false;
+
+//Scheduler Vars
+    uint64_t Scheduler::NextPID = 0;
 //
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-#include <common/stdio.h>
-#include <common/cstring.h>
 
 void IdleProcess() {
-    while (true) __asm__("hlt");
+    while (true)
+    {
+        //IDLE
+    }
 }
 
-int64_t ProcessLevel::GetNextPID(){
-    //Check the first PID section
-    for(int i = 0; i < 64; i++){
-        //Check if not locked
-        if(!((AvialablePID1 >> i) & 1U)){
-            AvialablePID1 ^= (-1 ^ AvialablePID1) & (1UL << i);
-            return i;
-        }
+Scheduler::Scheduler(Interrupts::InterruptManager* im, uint64_t entry)
+    : Interrupts::InterruptHandler(IPI_SCHEDULE, im) //Interrupt
+{
+    //Current CPU
+    UnifiedOS::CPU::CPU* cpu = CPU::GetCPULocal();
+
+    //Create Idle processes
+    for(unsigned i = 0; i < SMP::ActiveCPUs; i++){
+        //Create a process name (With ID)
+        char* ProcName = "IdleCPU00";
+        ProcName[8] = to_string((int64_t)i)[0];
+        ProcName[9] = to_string((int64_t)i)[1];
+
+        //Create a idle Process with the name
+        SMP::CPUs[i]->idleProcess = CreateIdleProcess(ProcName);
     }
 
-    for(int i = 0; i < 64; i++){
-        //Check if not locked
-        if(!((AvialablePID2 >> i) & 1U)){
-            AvialablePID2 ^= (-1 ^ AvialablePID2) & (1UL << i);
-            return i + 64;
-        }
+    //Clear the queue
+    for(unsigned i = 0; i < SMP::ActiveCPUs; i++){
+        // acquireLock(&SMP::CPUs[i]->QueueLock);
+        //Clear the queue with force
+        SMP::CPUs[i]->Queue = new Vector<Process*>; //Needed for some reason
+
+        SMP::CPUs[i]->Queue->clear();
+        releaseLock(&SMP::CPUs[i]->QueueLock);
     }
 
-    for(int i = 0; i < 64; i++){
-        //Check if not locked
-        if(!((AvialablePID3 >> i) & 1U)){
-            AvialablePID3 ^= (-1 ^ AvialablePID3) & (1UL << i);
-            return i + 128;
-        }
-    }
+    //Create a process to continue the kernel process
+    NewProcess("KernelStage2", entry, 0);
 
-    for(int i = 0; i < 64; i++){
-        //Check if not locked
-        if(!((AvialablePID4 >> i) & 1U)){
-            AvialablePID4 ^= (-1 ^ AvialablePID4) & (1UL << i);
-            return i + 192;
-        }
-    }
-
-    return -1;
+    //Current process to nullptr
+    cpu->currentProcess = nullptr;
+    
+    //Start scheduling
+    SchedulerReady = true;
+    asm("sti; int $0xfd"); //IPI_SCHEDULE
 }
 
-int64_t ProcessLevel::FreePID(uint64_t PID){
-    if(PID < 64){
-        AvialablePID1 ^= (1 << (PID % 64));
-        return 1;
-    }
-    else if(PID < 128){
-        AvialablePID2 ^= (1 << (PID % 64));
-        return 1;
-    }
-    else if(PID < 192){
-        AvialablePID3 ^= (1 << (PID % 64));
-        return 1;
-    }
-    else if(PID < 256){
-        AvialablePID4 ^= (1 << (PID % 64));
-        return 1;
-    }
-    return -1;
+void Scheduler::Tick(uint64_t rsp){
+    //Only run once intialised (Because it's run on each PIT tick, this may be called before intialisation)
+    if(!SchedulerReady)
+        return;
+
+    //Send IPI to other processes
+    IO::APIC::SendIPI(0, ICR_DSH_OTHER, ICR_MESSAGE_TYPE_FIXED, IPI_SCHEDULE);
+
+    //THIS LINE CAUSES THE PAGE FAULT ERROR !
+    Schedule(rsp);
 }
 
-Scheduler::Scheduler(){
-    for(int i = 0; i <= 3; i++){
-        for(int u = 0; u < 256; u++){
-            ProcessLevels[i].processes[u] = nullptr;
-            ProcessLevels[i].sleeping[u] = nullptr;
+//This is run by both tick and interrupts
+//The Scheduling process
+void Scheduler::Schedule(uint64_t rsp){
+    //Work out the cpu
+    UnifiedOS::CPU::CPU* cpu = CPU::GetCPULocal();
+
+    //If it has a active process
+    if(cpu->currentProcess){
+        //Increase it's ticks
+        cpu->currentProcess->ActiveTicks++;
+        
+        //See how long it has left
+        if(cpu->currentProcess->TimeSlice > 0){
+            //If still needs to run then run untill time is 0
+            cpu->currentProcess->TimeSlice--;
+            return;
         }
     }
 
-    //Idle
-    //We create idle first for PID 0
-    Process& idle = NewProcess(0).ContextCreation((uint64_t)IdleProcess, 0).SetLevel(0).SetRunning(true);
-    ProcessLevels[0].CurrentPID = idle.GetPID();
-
-    //Move current to the stack
-    Process& MainProcess = NewProcess(CurrentLevel).SetLevel(CurrentLevel).SetRunning(true);
-    ProcessLevels[CurrentLevel].CurrentPID = MainProcess.GetPID();
-
-    //Set current
-    ActiveProcess = &MainProcess;
-}
-
-Process& Scheduler::NewProcess(int level){
-    if(level >= 0 && level <= kMaxLevel){
-        uint64_t PID = ProcessLevels[level].GetNextPID();
-
-        if(PID == -1){
-            return *((Process*)nullptr);
-        }
-
-        Process* Proc = new Process(PID);
-
-        ProcessLevels[level].processes[PID] = Proc;
-
-        return *Proc;
+    //Ensure lock
+    while (__builtin_expect(acquireTestLock(&cpu->QueueLock), 0)) {
+        return;
     }
 
-    return *((Process*)nullptr);
-}
+    //If process is dying
+    if(__builtin_expect(cpu->currentProcess->State == PROCESS_DYING, 0)){
+        //Remove the process from queue
+        cpu->Queue->remove(cpu->currentProcess);
+        
+        //Load the idle process
+        cpu->currentProcess = cpu->idleProcess;
+    }
 
-void Scheduler::SwitchProcess(bool CurrentSleep = false){
-    if(CurrentSleep){
-        ProcessLevels[CurrentLevel].processes[ActiveProcess->GetPID()] = nullptr;
-        ProcessLevels[CurrentLevel].sleeping[ActiveProcess->GetPID()] = ActiveProcess;
+    //Check the size of the queue and if empte load idle process
+    if(__builtin_expect(cpu->Queue->get_length() <= 0 || /*Or Try &&*/ !cpu->currentProcess, 0)){
+        //If already on idle the ignore
+        if(cpu->currentProcess == cpu->idleProcess){
+            return;
+        }
 
-        //Find next PID
-        uint64_t NextPID = ActiveProcess->GetPID() + 1;
-        uint64_t Count = 0;
-        for(; Count < 256; Count++, NextPID++){
-            NextPID %= 256;
+        //Load the idle process
+        cpu->currentProcess = cpu->idleProcess;
+    }
+    else{ //Otherwise load from queue
 
-            if(ProcessLevels[CurrentLevel].processes[NextPID] != nullptr){
-                ProcessLevels[CurrentLevel].NextPID = NextPID;
+        if(cpu->currentProcess){
+            //Save current context (Registers)
+            cpu->currentProcess->Context = *(ProcessContext*)rsp;
 
-                break;
+            //Save the fx_state
+            asm volatile("fxsave64 (%0)" :: "r"((uint64_t)&cpu->currentProcess->fx_State) : "memory");
+        }
+
+        //First come, first served basis
+            if(cpu->currentProcess == cpu->Queue->get_at(0)){
+                //Remove from the front
+                cpu->Queue->erase(0);
+
+                //Add to the back
+                cpu->Queue->add_back(cpu->currentProcess);
             }
-        }
 
-        if(NextPID == ActiveProcess->GetPID()){
-            LevelChanged = true;
-            ProcessLevels[CurrentLevel].NextPID = -1;
-        }
+            //Load the front of the queue
+            cpu->currentProcess = cpu->Queue->at(0);
+        //
     }
 
-    if(LevelChanged){
-        LevelChanged = false;
-        for(int level = kMaxLevel; level >= 0; --level){
-            if(ProcessLevels[level].NextPID != -1){
-                CurrentLevel = level;
-                break;
-            }
-        }
-    }
+    //Set it's tick time
+    cpu->currentProcess->TimeSlice = cpu->currentProcess->DefaultTimeSlice;
 
-    Process* PrevProcess = ActiveProcess; 
-    ActiveProcess = ProcessLevels[CurrentLevel].processes[ProcessLevels[CurrentLevel].NextPID];
+    //Ensure rflag is set before swapping
+    // cpu->currentProcess->Context.rflags |= 0x200;
 
-    ProcessLevels[CurrentLevel].CurrentPID = ProcessLevels[CurrentLevel].NextPID;    
+    //Release the memory lock
+    releaseLock(&cpu->QueueLock);
 
-    ProcessSwitch((void*)(&ActiveProcess->GetContext()), (void*)(&PrevProcess->GetContext()));
+    //Load the FX_State
+    asm volatile("fxrstor64 (%0)" ::"r"((uint64_t)&cpu->currentProcess->fx_State) : "memory");
+
+    //TSS
+    GlobalDescriptorTable::SetKernelStack(&cpu->tss, (uint64_t)(cpu->currentProcess->Stack));
+
+    //Swap the process
+    ProcessSwitch(&(cpu->currentProcess->Context), (uint64_t)Paging::__PAGING__PTM_GLOBAL.PML4);
+
+    // //Load the Page Table
+    // asm("mov %0, %%cr3" : : "r" (Paging::__PAGING__PTM_GLOBAL.PML4));
+
+    // ProcessSwitch((void*)(&cpu->currentProcess->GetContext()), (void*)(&Previous->GetContext()));
 }
 
-void Scheduler::SwitchProcessF(){
-    //Find next PID
-    uint64_t NextPID = ActiveProcess->GetPID() + 1;
-    uint64_t Count = 0;
-    for(; Count < 256; Count++, NextPID++){
-        NextPID %= 256;
+Processes::Process* Scheduler::NewProcess(const char* Name, uint64_t entry, uint64_t data){
+    Process* p = new Process(NextPID++);
 
-        if(ProcessLevels[CurrentLevel].processes[NextPID] != nullptr){
-            ProcessLevels[CurrentLevel].NextPID = NextPID;
+    Memory::memcpy(&p->Name, Name, 16);
+
+    p->ContextCreation((uint64_t)entry, data);
+
+    UnifiedOS::CPU::CPU* cpu = SMP::CPUs[0];
+    for (unsigned i = 1; i < SMP::ActiveCPUs; i++) {
+        if (SMP::CPUs[i]->Queue->get_length() < cpu->Queue->get_length()) {
+            cpu = SMP::CPUs[i];
+        }
+
+        if (!cpu->Queue->get_length()) { //If len is 0
             break;
         }
     }
 
-    if(NextPID == ActiveProcess->GetPID()){
-        LevelChanged = true;
-        ProcessLevels[CurrentLevel].NextPID = -1;
-    }
+    acquireLock(&cpu->QueueLock);
+    asm("cli");
+    cpu->Queue->add_back(p);
+    releaseLock(&cpu->QueueLock);
+    asm("sti");
 
-    bool Found = false;
-
-    if(LevelChanged){
-        LevelChanged = false;
-        for(int level = kMaxLevel; level >= 0; --level){
-            if(ProcessLevels[level].NextPID != -1){
-                CurrentLevel = level;
-                Found = true;
-                break;
-            }
-        }
-    }
-
-    if(Found || !LevelChanged){
-        Process* PrevProcess = ActiveProcess; 
-        ActiveProcess = ProcessLevels[CurrentLevel].processes[ProcessLevels[CurrentLevel].NextPID];
-
-        ProcessLevels[CurrentLevel].CurrentPID = ProcessLevels[CurrentLevel].NextPID;    
-
-        ProcessSwitch((void*)(&ActiveProcess->GetContext()), (void*)(&PrevProcess->GetContext()));
-    }
+    return p;
 }
 
-void Scheduler::Sleep(Process* process){
-    if(process == nullptr) return;
-
-    if (!process->GetRunning()) {
-        return;
-    }
-
-    process->SetRunning(false);
-
-    if (process == ProcessLevels[CurrentLevel].processes[ProcessLevels[CurrentLevel].CurrentPID]) {
-        SwitchProcess(true);
-        return;
-    }
-}
-int Scheduler::Sleep(uint64_t pid){
-    if(pid > 255){
-        return -1;
-    }
-    Sleep(ProcessLevels[CurrentLevel].processes[pid]);
-    return 1;
-}
-void Scheduler::Wakeup(Process* process, int level = -1){
-    if(process == nullptr) return;
-
-    if (process->GetRunning()) {
-        ChangeLevelRunning(process, level);
-        return;
-    }
-
-    if (level < 0) {
-        level = process->GetLevel();
-    }
-
-    process->SetLevel(level);
-    process->SetRunning(true);
-
-    //POTENTIAL ISSUE WITH NO PID AVAILABLE!!!!!!!
-    ProcessLevels[level].processes[process->PID] = process;
-
-    if (level > CurrentLevel) {
-        LevelChanged = true;
-    }
-    return;
-}
-int Scheduler::Wakeup(uint64_t pid, int level = -1){
-    if(pid > 255){
-        return -1;
-    }
-    Wakeup(ProcessLevels[CurrentLevel].processes[ProcessLevels[CurrentLevel].CurrentPID], level);
-    return 1;
+void Scheduler::HandleInterrupt(uint64_t rsp){
+    //Call the scheduler
+    Schedule(rsp);
 }
 
-void Scheduler::Kill(Processes::Process* process){
-    if(process == nullptr) return;
+Process* Scheduler::CreateIdleProcess(const char* Name){
+    Process* p = new Process(NextPID++);
 
-    for(int i = 0; i < kMaxLevel; i++){
-        if(ProcessLevels[i].processes[process->GetPID()] == process){
-            ProcessLevels[i].processes[process->GetPID()] = nullptr;
-            ProcessLevels[i].FreePID(process->GetPID());
-            break;
-        }
-        else if (ProcessLevels[i].sleeping[process->GetPID()] == process){
-            ProcessLevels[i].sleeping[process->GetPID()] = nullptr;
-            ProcessLevels[i].FreePID(process->GetPID());
-            break;
-        }
-    }
+    Memory::memcpy(&p->Name, Name, 16);
 
-    // delete process;
-}
-int Scheduler::Kill(uint64_t pid){
-    if(pid > 255){
-        return -1;
-    }
-    Kill(ProcessLevels[CurrentLevel].processes[pid]);
+    p->IdleContextCreation((uint64_t)IdleProcess, 0);
+
+    return p;
 }
 
-Process& Scheduler::CurrentProcess(){
-    return *ActiveProcess;
-}
+Scheduling::Scheduler* Scheduling::__SCHEDULER__ = nullptr;
 
-void Scheduler::ChangeLevelRunning(Process* process, int level){
-    //Ingore untill Vectors
-}
-
-void Scheduler::Tick(){
-    TimerTick++;
-    if(TimerTick % DEFAUL_PROCESS_TICK_COUNT == 0){
-        SwitchProcessF();
-        TimerTick = 0;
-    }
-}
-
-Scheduler* Scheduling::__SCHEDULER__;
-
-void Scheduling::InitializeProcess(){
-    __SCHEDULER__ = new Scheduler;
+void Scheduling::IntialiseScheduler(Interrupts::InterruptManager* im, uint64_t entry){
+    __SCHEDULER__ = new Scheduler(im, entry);
 }

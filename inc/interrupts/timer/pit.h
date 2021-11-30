@@ -32,7 +32,7 @@ namespace UnifiedOS{
                 void SetFrequency(uint64_t frequency);
 
                 //Ticking
-                virtual uint64_t HandleInterrupt(uint64_t rsp);
+                virtual void HandleInterrupt(uint64_t rsp);
             };
 
             //Global Timer

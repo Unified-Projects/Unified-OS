@@ -23,6 +23,12 @@ namespace UnifiedOS{
                 uint64_t Reserved;
             } __attribute__((packed));
 
+            struct MADTHeader{
+                SDTHeader Header;
+                uint32_t APICAddress;
+                uint32_t Flags; // (1 = Dual 8259 Legacy PICs Installed)
+            } __attribute__((packed));
+
             struct DeviceConfig{
                 uint64_t BaseAddress;
                 uint16_t PCISegGroup;

@@ -43,7 +43,7 @@ namespace UnifiedOS{
             ~PS2MouseDriver();
 
             //Interrupt
-            virtual uint64_t HandleInterrupt(uint64_t rsp);
+            virtual void HandleInterrupt(uint64_t rsp);
 
             //Activation
             virtual void Activate();
