@@ -128,8 +128,8 @@ void Scheduler::Schedule(uint64_t rsp){
             //Save current context (Registers)
             cpu->currentProcess->Context = *(ProcessContext*)rsp;
 
-            //Save the fx_state
-            asm volatile("fxsave64 (%0)" :: "r"((uint64_t)&cpu->currentProcess->fx_State) : "memory");
+            //Save the fx_state (Issue here right now)
+            // asm volatile("fxsave64 (%0)" :: "r"((uint64_t)&cpu->currentProcess->fx_State) : "memory");
         }
 
         //First come, first served basis
@@ -156,7 +156,7 @@ void Scheduler::Schedule(uint64_t rsp){
     releaseLock(&cpu->QueueLock);
 
     //Load the FX_State
-    asm volatile("fxrstor64 (%0)" ::"r"((uint64_t)&cpu->currentProcess->fx_State) : "memory");
+    // asm volatile("fxrstor64 (%0)" ::"r"((uint64_t)&cpu->currentProcess->fx_State) : "memory");
 
     //TSS
     GlobalDescriptorTable::SetKernelStack(&cpu->tss, (uint64_t)(cpu->currentProcess->Stack));

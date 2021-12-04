@@ -8,16 +8,60 @@ using namespace UnifiedOS::FileSystem;
 #include <memory/heap.h>
 
 #include <fs/GPT.h>
+#include <fs/MBR.h>
 
-#include <common/stdio.h>
-#include <common/cstring.h>
+#include <fs/Formats/FAT/FAT32/FATPartition.h>
+
+#include <fs/ByteInteraction.h>
+
+#include <fs/VolumeManager.h>
+
+//Disk Type Checker
+PartitionDevice* GPTCreatePartition(GPT::GPTPartitonEntry Entry, DiskDevice* diskDev){
+    //GetType
+    GPT::GUID Guid;
+    Guid.operator=((uint8_t*)&(Entry.TypeGUID));
+
+    GPT::GPT_Types PartType =  Guid.GetGUIDType();
+
+    //Switch Type
+    switch (PartType)
+    {
+    case GPT::BASIC_DATA_PARITITON :{//The "FAT" Types
+        //Boot Sector
+        void* BootSector = Memory::malloc(512);
+        diskDev->ReadBlocks(Entry.StartLBA, 1, BootSector);
+
+        switch (UnifiedOS::FileSystem::Byte::Get8Byte(BootSector, 82)) //FATs
+        {
+        case 0x4641543332202020: //FAT32
+            return new FAT32::Fat32Partition(Entry, diskDev, BootSector);
+            break;
+        
+        default:
+            break;
+        }
+
+        //Free boot sector
+        Memory::free(BootSector);
+
+        break;
+        }
+    case GPT::EFI_SYSTEM_PARTITION: //Same as ^
+        break;
+    }
+
+    //No FS Found or compatible
+    return nullptr;
+}
 
 //Recive one of 8 buffers
 int DiskDevice::GetBuffer(){
     for(int i = 0; i < 8; i++){
         //Check if not locked
         if(!((bufferLock >> i) & 1U)){
-            bufferLock ^= (-1 ^ bufferLock) & (1UL << i);
+            // bufferLock ^= (-1 ^ bufferLock) & (1UL << i);
+            bufferLock |= (1<<i);
             return i;
         }
     }
@@ -25,7 +69,8 @@ int DiskDevice::GetBuffer(){
     return -1;
 }
 int DiskDevice::RelieveBuffer(uint8_t index){
-    bufferLock ^= (-1 ^ bufferLock) & (1UL << index); //Toggle bit to off
+    // bufferLock ^= (-1 ^ bufferLock) & (1UL << index); //Toggle bit to off
+    bufferLock &= ~(1<<index);
     return 1;
 }
 
@@ -47,20 +92,30 @@ int DiskDevice::InitializePartitions(){
     ReadBlocks(1, 1, Header);
 
     if(Header->Signature == GPT_HEADER_SIGNATURE_BIG_ENDIAN){
-        // GPT::GPTPartitonEntry* Partitions = (GPT::GPTPartitonEntry*)Memory::malloc(Header->PartEntrySize * Header->PartNum);
+        //Read partition Entries
+        GPT::GPTPartitonEntry* Partitions = (GPT::GPTPartitonEntry*)Memory::malloc(Header->PartEntrySize * Header->PartNum);
+        ReadBlocks(Header->PartitionTableLBA, (Header->PartNum * Header->PartEntrySize)/blocksize, Partitions);
 
-        // ReadBlocks(Header->PartitionTableLBA, (Header->PartNum * Header->PartEntrySize)/blocksize, Partitions);
+        for(int i = 0; i < Header->PartNum; i++){
+            if(Partitions[i].TypeGUID[0] != 0x00){
+                //Create a partition
+                PartitionDevice* partitionOut = GPTCreatePartition(Partitions[i], this);
 
-        // uint8_t PC = 0;
+                if(partitionOut == nullptr){
+                    continue;
+                }
 
-        // for(int i = 0; i < Header->PartNum; i++){
-        //     if(Partitions[i].TypeGUID[0] != 0x00){
-        //         PC++;
-        //     }
-        // }
+                //Add it to list
+                partitions.add_back(partitionOut);
+            
+                //Next Mount it
+                if(partitionOut->Flags.AutoMount && !partitionOut->Flags.Hidden){
+                    __FS_VOLUME_MANAGER__->MountPartition(partitionOut);
+                }
+            }
+        }
 
-        // printf(to_string((int64_t)PC));
-        // Next();
+        Memory::free(Partitions);
     }
     else{
         return -1; //MBR not implemented
@@ -86,7 +141,7 @@ int DiskDevice::Read(size_t off, size_t size, uint8_t* buffer){
 
     //Work out starting LBA
     size_t StartLBA = off / blocksize;
-    size_t OffsetInLBA = (off - ((off / blocksize) * blocksize));
+    size_t OffsetInLBA = (off % blocksize);
     size_t SizeWithinFirstLBA = blocksize - OffsetInLBA;
 
     //Get that one block
@@ -227,25 +282,25 @@ int DiskDevice::ReadBlocks(uint64_t lba, size_t count, void* buffer){
     } 
 
     //Read in block sizes of 8 (Fast)
-    for(int i = 0; i < ((count-lbapos) % 8) - 1; i++, lbapos+=8){
+    for(; (count-lbapos >= 8); lbapos+=8){
         ReadDiskBlock(lba + lbapos, 8, Buffer[BufNum]);
         Memory::memcpy(((uint8_t*)buffer + (lbapos * 512)), Buffer[BufNum], blocksize*8);
     }
 
     //Read in block size of 4
-    for(int i = 0; i < ((count-lbapos) % 4) - 1; i++, lbapos+=4){
+    for(; (count-lbapos >= 4); lbapos+=4){
         ReadDiskBlock(lba + lbapos, 4, Buffer[BufNum]);
         Memory::memcpy(((uint8_t*)buffer + (lbapos * 512)), Buffer[BufNum], blocksize*4);
     }
 
     //Block size of 2
-    for(int i = 0; i < ((count-lbapos) % 2) - 1; i++, lbapos+=2){
+    for(; (count-lbapos >= 2); lbapos+=2){
         ReadDiskBlock(lba + lbapos, 2, Buffer[BufNum]);
         Memory::memcpy(((uint8_t*)buffer + (lbapos * 512)), Buffer[BufNum], blocksize*2);
     }
 
     //Finish of the blocks
-    for(; lbapos < lba; lbapos++){
+    for(; (count-lbapos > 0); lbapos++){
         ReadDiskBlock(lba + lbapos, 1, Buffer[BufNum]);
         Memory::memcpy(((uint8_t*)buffer + (lbapos * 512)), Buffer[BufNum], blocksize);
     }
@@ -261,23 +316,23 @@ int DiskDevice::WriteBlocks(uint64_t lba, size_t count, void* buffer){
     }
 
     //Read blocks in sections
-    for(int i = 0; i < ((count-lbapos) % 8) - 1; i++, lbapos+=8){
+    for(; (count-lbapos >= 8); lbapos+=8){
         Memory::memcpy(Buffer[BufNum], ((uint8_t*)buffer + (lbapos * 512)), blocksize*8);
         WriteDiskBlock(lba + lbapos, 8, Buffer[BufNum]);
     }
 
-    for(int i = 0; i < ((count-lbapos) % 4) - 1; i++, lbapos+=4){
+    for(; (count-lbapos >= 4); lbapos+=4){
         Memory::memcpy(Buffer[BufNum], ((uint8_t*)buffer + (lbapos * 512)), blocksize*4);
         WriteDiskBlock(lba + lbapos, 4, Buffer[BufNum]);
     }
 
-    for(int i = 0; i < ((count-lbapos) % 2) - 1; i++, lbapos+=2){
+    for(; (count-lbapos >= 2); lbapos+=2){
         Memory::memcpy(Buffer[BufNum], ((uint8_t*)buffer + (lbapos * 512)), blocksize*2);
         WriteDiskBlock(lba + lbapos, 2, Buffer[BufNum]);
     }
 
     //End blocks
-    for(; lbapos < lba; lbapos++){
+    for(; (count-lbapos > 0); lbapos++){
         Memory::memcpy(Buffer[BufNum], ((uint8_t*)buffer + (lbapos * 512)), blocksize);
         WriteDiskBlock(lba + lbapos, 1, Buffer[BufNum]);
     }

@@ -117,6 +117,9 @@ bool VolumeManager::MountPartition(PartitionDevice* partition, uint8_t MPoint = 
             //Mount Partition
             Partitions[M] = partition;
 
+            //Run it's mount
+            partition->MountPartition(M);
+
             return true;
         }
     }

@@ -1,5 +1,5 @@
-#ifndef __UNIFIED_OS_FS_GPT_H
-#define __UNIFIED_OS_FS_GPT_H
+#ifndef __UNIFIED_OS_FS_BYTES_H
+#define __UNIFIED_OS_FS_BYTES_H
 
 #include <common/stdint.h>
 

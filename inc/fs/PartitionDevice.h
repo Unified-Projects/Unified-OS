@@ -3,6 +3,8 @@
 
 #include <common/stdint.h>
 
+#include <fs/GeneralStructs.h>
+
 namespace UnifiedOS{
     namespace FileSystem{
         class DiskDevice;
@@ -13,11 +15,18 @@ namespace UnifiedOS{
         };
 
         class PartitionDevice{
-        protected:
+            struct PartitionFlags
+            {
+                bool Hidden;
+                bool AutoMount;
+                bool ReadOnly;
+            };
+            
+        public:
             char* PartitionName;
         public:
             //Setup of a partition
-            PartitionDevice(uint64_t startLBA, uint64_t endLBA, DiskDevice* disk);
+            PartitionDevice(uint64_t startLBA, uint64_t endLBA, uint8_t TypeGUID[16], uint8_t PartitionGUID[16], DiskDevice* disk);
 
             //Read/Writing of a block at an offset
             virtual int ReadAbsolute(uint64_t off, size_t count, void* buffer);
@@ -30,16 +39,25 @@ namespace UnifiedOS{
             virtual int Read(size_t off, size_t size, uint8_t* buffer);
             virtual int Write(size_t off, size_t size, uint8_t* buffer);
 
+            //Resolve Structures
+            virtual GeneralFile ResolveFile(const char* Path); //Returns a file object containing info
+            virtual GeneralDirectory ResolveDir(const char* Path); //Returns a list of directory entries
+
+            //Need to introduce writing to the disk and modifying data. This will require me to reorganise the file data
+            // virtual int WriteFile(GeneralFile File, uint8_t* NewData); //Will remove / add new clusters to the data
+
             //Deconstructor
             ~PartitionDevice();
 
             //Disk
-            DiskDevice* parentDisk;
+            DiskDevice* ParentDisk;
 
         public: //Mounting
             void MountPartition(uint8_t MountPoint);
             const uint8_t& Mount;
             const bool& Mounted;
+
+            const PartitionFlags& Flags;
 
         public: //Public Info (Read Only)
             const uint64_t& PartitionSize;
@@ -55,6 +73,11 @@ namespace UnifiedOS{
 
             uint8_t rMount;
             bool rMounted;
+
+            PartitionFlags rFlags;
+
+            uint8_t TypeGUID[16];
+            uint8_t PartitionGUID[16];
 
         private:
             //Reference to the positions of the parition

@@ -3,6 +3,8 @@
 
 #include <fs/PartitionDevice.h>
 
+#include <common/vector.h>
+
 namespace UnifiedOS{
     namespace FileSystem{
         class DiskDevice{
@@ -39,7 +41,7 @@ namespace UnifiedOS{
             ~DiskDevice();
             
             //Make into list
-            PartitionDevice* partitions[16];
+            Vector<PartitionDevice*> partitions;
             int blocksize = 512;
 
             //Set Name (Port)

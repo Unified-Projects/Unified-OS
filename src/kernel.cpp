@@ -56,6 +56,14 @@ using namespace UnifiedOS::Devices;
 
 using namespace UnifiedOS::FileSystem;
 
+//SOMETHING TO HAVE A LOOK INTO FOR MAXIMUM MEMORY EFFICIENCY
+//Look over code and make sure all needed * are kept but all un needed get removed
+// (delete pointer)
+//
+//
+//
+//
+
 //For locking the memory at the kernel
 extern uint64_t _KernelStart;
 extern uint64_t _KernelEnd;
@@ -299,6 +307,10 @@ extern "C" void kernelMain(BootInfo* bootInfo)
     printf(to_string((int64_t)SMP::ActiveCPUs));
     printf(" Have Been Booted!\n\n");
 
+    //Issues here with real hardware:
+    //Either SMP fails to exit (I presume TSS)
+    //Scheduling has issues with process swapping and all of that swaps
+
     //Processes
     Scheduling::IntialiseScheduler(Pointers::Interrupts::Interrupts, (uint64_t)KernelStage2); //CAUSES ISSUES (REAL HARDWARE Div by zero Exception)
     // Process* proctest = Scheduling::__SCHEDULER__->NewProcess("TestProcess", (uint64_t)TaskA, 0);
@@ -307,6 +319,8 @@ extern "C" void kernelMain(BootInfo* bootInfo)
             //User space (NEED TO IMPLEMENT) (https://wiki.osdev.org/Getting_to_Ring_3)
             //    This will also need to link to system calls for userspace to reach
             //Kernel space (This)
+
+    // KernelStage2();
 
     while(true){
         // printf("Task Kernel...\n");

@@ -51,6 +51,6 @@ inline void* operator new[](size_t size, void* p) {return p;}
 //Acts as a deleter for pointers
 inline void operator delete(void* p) {UnifiedOS::Memory::free(p);}
 inline void operator delete[](void* p) {UnifiedOS::Memory::free(p);}
-inline void operator delete(void* p, size_t l) {UnifiedOS::Memory::free(p);}
+inline void operator delete(void* p, unsigned long l) {UnifiedOS::Memory::free(p);}
 
 #endif
