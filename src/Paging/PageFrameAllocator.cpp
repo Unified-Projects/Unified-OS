@@ -79,7 +79,7 @@ void PageFrameAllocator::ReadEFIMemoryMap(EFI_MEMORY_DESCRIPTOR* mMap, size_t mM
     }
 
     //Lock the BIOS pages
-    ReservePages(0, 0x100);
+    ReservePages((void*)0, 0x100);
 
     //Lock the Bitmap
     LockPages(PageBitmap.Buffer, PageBitmap.Size / 4096 + 1);

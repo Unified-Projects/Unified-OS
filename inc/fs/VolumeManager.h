@@ -50,6 +50,9 @@ namespace UnifiedOS{
             //-1 Mount point means auto assign
             bool MountVolume(DiskDevice* volume);
             bool MountPartition(PartitionDevice* partition, uint8_t MPoint = 0xFF);
+        
+            GeneralFile ResolveFile(const char* Path);
+            GeneralDirectory ResolveDir(const char* Path);
         };
 
         //Global

@@ -3,7 +3,7 @@
 
 #include <common/stdint.h>
 
-#define DEFAUL_PROCESS_TICK_COUNT 10
+#define DEFAUL_PROCESS_TICK_COUNT 5
 
 namespace UnifiedOS{
     namespace Scheduling{
@@ -85,7 +85,7 @@ namespace UnifiedOS{
             //Context of the Process for task swapping
             uint8_t* Stack; // 4KiB
             ProcessContext Context;
-            FXState* fx_State;
+            void* fx_State;
             uint64_t fsBase = 0;
 
         public:

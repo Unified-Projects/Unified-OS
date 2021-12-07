@@ -64,6 +64,100 @@ using namespace UnifiedOS::FileSystem;
 //
 //
 
+#include <files/tga.h>
+#include <interrupts/syscall.h>
+
+void InitVolumes(DriverManager* driverM){
+
+    //NOTE
+    //TRY TO SETUP WITH LOOKING TO SEE IF THE VOLUME
+
+    //Locate Driver
+    Driver* driver = driverM->FindDriver("ACPI 1.0 Driver");
+
+    //Ensure Driver Found
+    if(driver != nullptr){
+        //Convert to AHCI
+        if(driver->MainObject != nullptr){
+            Drivers::AHCI::AHCIDriver* AHCIdriver = (Drivers::AHCI::AHCIDriver*)(driver->MainObject);
+            //Look at ports
+            for(int p = 0; p < AHCIdriver->portCount; p++){
+                //Find Disks
+                if(AHCIdriver->Ports[p]->portType == AHCI::AHCIPort::PortType::SATA){
+                    //Mount
+                    __FS_VOLUME_MANAGER__->MountVolume(AHCIdriver->Ports[p]);
+                }
+            }
+        }
+    }
+}
+
+void DrawBootScreen(){
+    Clear(0x00);
+
+    //Read the icon file
+    GeneralFile* File = syscall(6, "B:/UnifiedIcon.tga");
+
+    //If the file is found displat the logo
+    if(File->Found){
+        uint8_t* Buffer = (uint8_t*)Memory::malloc(__BOOT__BootContext__->framebuffer->BufferSize);
+        File->Disk->Read((File->Sectors[0]*512), File->FileSize, Buffer);
+
+        //Recode this!
+        TGA_Image image = TGA().GetImage(Buffer);
+
+        Memory::free(Buffer);
+
+        //Work out system center
+        uint64_t xoff = (__BOOT__BootContext__->framebuffer->Width / 2) - (image.header.width / 2);
+        uint64_t xoffText = (__BOOT__BootContext__->framebuffer->Width / 2) - ((strlen("Loading System") * 16) / 4);
+        uint64_t xoffText1 = (__BOOT__BootContext__->framebuffer->Width / 2) - ((strlen("Unified OS: Version 0.0.1") * 16) / 4);
+
+        uint64_t yoff = (__BOOT__BootContext__->framebuffer->Height / 4) - (image.header.width / 2);
+        uint64_t yoffText = ((__BOOT__BootContext__->framebuffer->Height / 2)) - 8;
+
+        for(int y = image.header.height - 1; y >= 0; y--){
+            for(int x = image.header.width - 1; x >= 0; x--){
+                putPix(x + xoff, (image.header.height - 1) - y + yoff, image.Buffer[(y * image.header.width) + x]);
+            } 
+        }
+
+        //Print boot
+        SetPosX(xoffText);
+        SetPosY(yoffText);
+        printf("Loading System\n");
+        SetPosX(xoffText1);
+        printf("Unified OS: Version 0.0.1");
+        SetPosX(0);
+        SetPosY(0);
+
+        //Delete Image Data after
+        delete image.Buffer;
+    }
+}
+
+void KernelStage2(){
+    //Volumes
+    InitVolumes(Pointers::Drivers::DriverManager);
+    //GP FAULT CAUSED HERE... ^ on real hardware
+    
+    // PS2Init();
+
+    //Real hardware is to be imagined right now with how this works
+
+    //Create Boot Screen
+    DrawBootScreen();
+
+    // TestTGA();
+
+    //Load System Modules
+
+    while (true)
+    {
+        /* code */
+    }
+}
+
 //For locking the memory at the kernel
 extern uint64_t _KernelStart;
 extern uint64_t _KernelEnd;
@@ -159,47 +253,6 @@ void InitialisePaging(){
 //     WaitData<false>();
 //     DataPort.Read();
 // }
-
-void InitVolumes(DriverManager* driverM){
-
-    //NOTE
-    //TRY TO SETUP WITH LOOKING TO SEE IF THE VOLUME
-
-    //Locate Driver
-    Driver* driver = driverM->FindDriver("ACPI 1.0 Driver");
-
-    //Ensure Driver Found
-    if(driver != nullptr){
-        //Convert to AHCI
-        if(driver->MainObject != nullptr){
-            Drivers::AHCI::AHCIDriver* AHCIdriver = (Drivers::AHCI::AHCIDriver*)(driver->MainObject);
-            //Look at ports
-            for(int p = 0; p < AHCIdriver->portCount; p++){
-                //Find Disks
-                if(AHCIdriver->Ports[p]->portType == AHCI::AHCIPort::PortType::SATA){
-                    //Mount
-                    __FS_VOLUME_MANAGER__->MountVolume(AHCIdriver->Ports[p]);
-                }
-            }
-        }
-    }
-}
-
-void KernelStage2(){
-    //Volumes
-    InitVolumes(Pointers::Drivers::DriverManager);
-    //GP FAULT CAUSED HERE... ^
-    
-    // PS2Init();
-
-    printf("Stage 2 Entry Complete\n");
-
-    while (true)
-    {
-        /* code */
-    }
-    
-}
 
 extern "C" void kernelMain(BootInfo* bootInfo)
 {
@@ -309,11 +362,13 @@ extern "C" void kernelMain(BootInfo* bootInfo)
 
     //Issues here with real hardware:
     //Either SMP fails to exit (I presume TSS)
+    //Or somthing wrong with the preparation of the SMP Trampoline just not working (well working but breaking everything else)
     //Scheduling has issues with process swapping and all of that swaps
 
     //Processes
     Scheduling::IntialiseScheduler(Pointers::Interrupts::Interrupts, (uint64_t)KernelStage2); //CAUSES ISSUES (REAL HARDWARE Div by zero Exception)
     // Process* proctest = Scheduling::__SCHEDULER__->NewProcess("TestProcess", (uint64_t)TaskA, 0);
+    //All issues I thought are actually TSS issues
 
         //TYPES
             //User space (NEED TO IMPLEMENT) (https://wiki.osdev.org/Getting_to_Ring_3)

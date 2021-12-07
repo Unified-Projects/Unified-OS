@@ -64,6 +64,6 @@ namespace UnifiedOS{
 }
 
 //Task changing
-extern "C" void ProcessSwitch(UnifiedOS::Processes::ProcessContext* context, uint64_t pml4);
+extern "C" [[noreturn]] void ProcessSwitch(UnifiedOS::Processes::ProcessContext* context, uint64_t pml4);
 
 #endif

@@ -33,7 +33,7 @@ volatile uint64_t* smpStack = (uint64_t*)SMP_TRAMPOLINE_STACK;
 volatile uint64_t* smpEntry2 = (uint64_t*)SMP_TRAMPOLINE_ENTRY2;
 
 //ASM for the boot SMP entry (Encoded using the python script)
-const char* SMP_ENTRY_ASM = "\xfa\xfc\xb8\x3f\xb3\xa3\x0\x10\xf\x20\xe0\x66\x83\xc8\x20\xf\x22\xe0\x66\xa1\x20\x10\xf\x22\xd8\x66\xb9\x80\x0\x0\xc0\xf\x32\x66\xd\x0\x1\x0\x0\xf\x30\xf\x20\xc0\x66\xd\x1\x0\x0\x80\xf\x22\xc0\xf\x1\x16\x10\x10\xea\x40\x20\x8\x0\xf4\x66\xb8\x10\x0\x8e\xd8\x8e\xc0\x8e\xe0\x8e\xe8\x8e\xd0\x48\x8b\x24\x25\x28\x10\x0\x0\xf\x20\xc0\x66\x83\xe0\xfb\x66\x83\xc8\x2\xf\x22\xc0\xf\x20\xe0\x66\xd\x0\x6\xf\x22\xe0\x48\x31\xed\x48\x8b\x3c\x25\x2\x10\x0\x0\xff\x14\x25\x30\x10\x0\x0\xfa\xf4";
+const char* SMP_ENTRY_ASM = "\xfa\xfc\xb8\x3f\xb3\xa3\x0\x30\xf\x20\xe0\x66\x83\xc8\x20\xf\x22\xe0\x66\xa1\x20\x30\xf\x22\xd8\x66\xb9\x80\x0\x0\xc0\xf\x32\x66\xd\x0\x1\x0\x0\xf\x30\xf\x20\xc0\x66\xd\x1\x0\x0\x80\xf\x22\xc0\xf\x1\x16\x10\x30\xea\x40\x10\x8\x0\xf4\x66\xb8\x10\x0\x8e\xd8\x8e\xc0\x8e\xe0\x8e\xe8\x8e\xd0\x48\x8b\x24\x25\x28\x30\x0\x0\xf\x20\xc0\x66\x83\xe0\xfb\x66\x83\xc8\x2\xf\x22\xc0\xf\x20\xe0\x66\xd\x0\x6\xf\x22\xe0\x48\x31\xed\x48\x8b\x3c\x25\x2\x30\x0\x0\xff\x14\x25\x30\x30\x0\x0\xfa\xf4";
 const uint8_t SMP_ENTRY_ASM_LEN = 130;
 
 //CPU Setup
@@ -72,7 +72,7 @@ void SMPEntry(uint16_t id) {
     Enable();
 
     //Empty the queue
-    cpu->Queue = new Vector<Processes::Process*>();
+    cpu->Queue = new Vector<Processes::Process*>{};
 
     //Allow next cpu to boot
     doneInit = true;
@@ -97,8 +97,9 @@ void SMPEntry(uint16_t id) {
 //Setup asm
 void PrepareTrampoline() {
     //Copy the SMP ASM to a 16bit address to be booted into
-    Paging::__PAGING__PTM_GLOBAL.MapMemory((void*)SMP_TRAMPOLINE_ENTRY, (void*)SMP_TRAMPOLINE_ENTRY);
-    memcpy((void*)SMP_TRAMPOLINE_ENTRY, SMP_ENTRY_ASM, SMP_ENTRY_ASM_LEN);
+    // Paging::__PAGING__PTM_GLOBAL.MapMemory((void*)SMP_TRAMPOLINE_ENTRY, (void*)SMP_TRAMPOLINE_ENTRY);
+    //For some reason 0x2000 just does not work it causes issues
+    memcpy((void*)SMP_TRAMPOLINE_ENTRY, (void*)SMP_ENTRY_ASM, SMP_ENTRY_ASM_LEN);
 }
 
 //Setup a cpu
@@ -142,7 +143,7 @@ int InitializeCPU(uint16_t id) {
     if ((*smpMagic) != 0xB33F) {
         //Failed to start
         printf("Failed To Intialise CPU\n");
-        return 0;
+        return 0; //Dissabled so that when the CPU thinks it failed sometimes it does not and this takes things out of sync
     }
 
     //Wait for SMP entry to finish
@@ -166,6 +167,10 @@ void SMP::Intitialise(){
 
     //Prepare ASM
     PrepareTrampoline();
+
+    //Check Area
+    if(memcmp(SMP_ENTRY_ASM, SMP_TRAMPOLINE_ENTRY, SMP_ENTRY_ASM_LEN))
+        printf("Identical\n");
 
     ActiveCPUs = 1;
 

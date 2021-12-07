@@ -4,6 +4,9 @@ using namespace UnifiedOS;
 using namespace UnifiedOS::Interrupts;
 using namespace UnifiedOS::Interrupts::Syscalls;
 
+#include <process/Scheduler/Scheduler.h>
+#include <fs/VolumeManager.h>
+
 //Registers
 struct Registers
 {
@@ -30,18 +33,37 @@ struct Registers
 };
 
 //Arguments
-#define SC_ARG0(r) ((r)->rdi)
-#define SC_ARG1(r) ((r)->rsi)
-#define SC_ARG2(r) ((r)->rdx)
+#define SC_ARG0(r) ((r)->rdx)
+#define SC_ARG1(r) ((r)->rdi)
+#define SC_ARG2(r) ((r)->rsi)
 #define SC_ARG3(r) ((r)->r10)
 #define SC_ARG4(r) ((r)->r9)
 #define SC_ARG5(r) ((r)->r8)
 
 #include <common/stdio.h>
+#include <common/cstring.h>
+
+// uint64_t Sys(uint64_t rsp){ //
+//     return rsp;
+// }
 
 //Syscalls
-uint64_t SysPrint(uint64_t rsp){
-    printf((const char*)(SC_ARG0((Registers*)rsp)));
+uint64_t SysPrint(uint64_t rsp){ //Print on the screen (Update to communcate with process and work out if it has a terminal parent)
+    printf((const char*)SC_ARG0((Registers*)rsp));
+    return rsp;
+}
+
+
+//Process Introduction
+uint64_t SysExec(uint64_t rsp){ // Create a process from a ELF
+    return rsp;
+}
+
+uint64_t SysFork(uint64_t rsp){ // Clone a process
+    return rsp;
+}
+
+uint64_t SysYeild(uint64_t rsp){ // Stop a process temporaraly
     return rsp;
 }
 
@@ -53,6 +75,38 @@ uint64_t SysKill(uint64_t rsp){ //Kill a process at a PID
     return rsp;
 }
 
+//Filesystem
+uint64_t SysResolveFile(uint64_t rsp){ // Get a file from a path
+    //First Resolve the path
+    FileSystem::GeneralFile* File = new FileSystem::GeneralFile(FileSystem::__FS_VOLUME_MANAGER__->ResolveFile((const char*)SC_ARG0((Registers*)rsp)));
+
+    //Set the return value
+    ((Registers*)rsp)->rax = File;
+
+    return rsp;
+}
+
+uint64_t SysResolveDir(uint64_t rsp){ // Get a directory from a path
+    return rsp;
+}
+
+uint64_t SysCreateFile(uint64_t rsp){ // Create a file
+    return rsp;
+}
+
+uint64_t SysCreateDir(uint64_t rsp){ // Create a dir
+    return rsp;
+}
+
+uint64_t SysUpdateFile(uint64_t rsp){ // Update a files data
+    return rsp;
+}
+
+uint64_t SysUpdateDir(uint64_t rsp){ // Update a directories data
+    return rsp;
+}
+
+
 //
 //
 //
@@ -63,8 +117,19 @@ uint64_t SysKill(uint64_t rsp){ //Kill a process at a PID
 //
 Syscall SyscallHandler::SyscallResults[SYSCALL_COUNT] = {
     SysPrint,
+
+    SysExec,
+    SysFork,
+    SysYeild,
     SysExit,
-    SysKill
+    SysKill,
+
+    SysResolveFile,
+    SysResolveDir,
+    SysCreateFile,
+    SysCreateDir,
+    SysUpdateFile,
+    SysUpdateDir,
 };
 
 SyscallHandler::SyscallHandler(InterruptManager* im)

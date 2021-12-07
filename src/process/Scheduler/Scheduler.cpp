@@ -50,7 +50,7 @@ Scheduler::Scheduler(Interrupts::InterruptManager* im, uint64_t entry)
     for(unsigned i = 0; i < SMP::ActiveCPUs; i++){
         // acquireLock(&SMP::CPUs[i]->QueueLock);
         //Clear the queue with force
-        SMP::CPUs[i]->Queue = new Vector<Process*>; //Needed for some reason
+        // SMP::CPUs[i]->Queue = new Vector<Process*>; //Needed for some reason
 
         SMP::CPUs[i]->Queue->clear();
         releaseLock(&SMP::CPUs[i]->QueueLock);
@@ -64,7 +64,7 @@ Scheduler::Scheduler(Interrupts::InterruptManager* im, uint64_t entry)
     
     //Start scheduling
     SchedulerReady = true;
-    asm("sti; int $0xfd"); //IPI_SCHEDULE
+    asm("int $0xfd"); //IPI_SCHEDULE
 }
 
 void Scheduler::Tick(uint64_t rsp){
@@ -85,95 +85,75 @@ void Scheduler::Schedule(uint64_t rsp){
     //Work out the cpu
     UnifiedOS::CPU::CPU* cpu = CPU::GetCPULocal();
 
-    //If it has a active process
+    //Check if a current process is running
     if(cpu->currentProcess){
-        //Increase it's ticks
+        //Increase it's Tick counter
         cpu->currentProcess->ActiveTicks++;
-        
-        //See how long it has left
+
+        //If it still needs to run, let it continue
         if(cpu->currentProcess->TimeSlice > 0){
-            //If still needs to run then run untill time is 0
             cpu->currentProcess->TimeSlice--;
             return;
         }
     }
 
-    //Ensure lock
+    //Ensure lock without stalling
     while (__builtin_expect(acquireTestLock(&cpu->QueueLock), 0)) {
         return;
     }
-
-    //If process is dying
-    if(__builtin_expect(cpu->currentProcess->State == PROCESS_DYING, 0)){
-        //Remove the process from queue
-        cpu->Queue->remove(cpu->currentProcess);
-        
-        //Load the idle process
+    
+    //Idle the cpu if nothing is available
+    if(!cpu->currentProcess || cpu->Queue->size() <= 0){
         cpu->currentProcess = cpu->idleProcess;
     }
-
-    //Check the size of the queue and if empte load idle process
-    if(__builtin_expect(cpu->Queue->get_length() <= 0 || /*Or Try &&*/ !cpu->currentProcess, 0)){
-        //If already on idle the ignore
-        if(cpu->currentProcess == cpu->idleProcess){
-            return;
+    else{
+        //Kill process if dying
+        if(cpu->currentProcess->State == PROCESS_DYING){
+            cpu->Queue->remove(cpu->currentProcess);
+            cpu->currentProcess = cpu->idleProcess;
         }
+        else{ //Swap process to next process
+            if(cpu->currentProcess != cpu->idleProcess){
+                cpu->currentProcess->TimeSlice = cpu->currentProcess->DefaultTimeSlice;
 
-        //Load the idle process
-        cpu->currentProcess = cpu->idleProcess;
-    }
-    else{ //Otherwise load from queue
+                //Save the FXState
+                asm volatile("fxsave64 (%0)" :: "r"((uint64_t)cpu->currentProcess->fx_State) : "memory");
 
-        if(cpu->currentProcess){
-            //Save current context (Registers)
-            cpu->currentProcess->Context = *(ProcessContext*)rsp;
-
-            //Save the fx_state (Issue here right now)
-            // asm volatile("fxsave64 (%0)" :: "r"((uint64_t)&cpu->currentProcess->fx_State) : "memory");
-        }
-
-        //First come, first served basis
-            if(cpu->currentProcess == cpu->Queue->get_at(0)){
-                //Remove from the front
+                //Save the stack
+                cpu->currentProcess->Context = *((ProcessContext*)rsp);
+                
+                //Add process to the back
                 cpu->Queue->erase(0);
-
-                //Add to the back
                 cpu->Queue->add_back(cpu->currentProcess);
             }
 
-            //Load the front of the queue
-            cpu->currentProcess = cpu->Queue->at(0);
-        //
+            //Swap process
+            cpu->currentProcess = cpu->Queue->get_at(0);
+            cpu->currentProcess->TimeSlice = cpu->currentProcess->DefaultTimeSlice;
+        }
     }
 
-    //Set it's tick time
-    cpu->currentProcess->TimeSlice = cpu->currentProcess->DefaultTimeSlice;
-
-    //Ensure rflag is set before swapping
-    // cpu->currentProcess->Context.rflags |= 0x200;
-
-    //Release the memory lock
+    //Lock Remover
     releaseLock(&cpu->QueueLock);
 
-    //Load the FX_State
-    // asm volatile("fxrstor64 (%0)" ::"r"((uint64_t)&cpu->currentProcess->fx_State) : "memory");
+    //FX state restoring
+    asm volatile("fxrstor64 (%0)" ::"r"((uint64_t)cpu->currentProcess->fx_State) : "memory");
+
+    //Used in user space
+    asm volatile("wrmsr" ::"a"(cpu->currentProcess->fsBase & 0xFFFFFFFF) /*Value low*/,
+                 "d"((cpu->currentProcess->fsBase >> 32) & 0xFFFFFFFF) /*Value high*/, "c"(0xC0000100) /*Set FS Base*/);
 
     //TSS
     GlobalDescriptorTable::SetKernelStack(&cpu->tss, (uint64_t)(cpu->currentProcess->Stack));
 
-    //Swap the process
-    ProcessSwitch(&(cpu->currentProcess->Context), (uint64_t)Paging::__PAGING__PTM_GLOBAL.PML4);
-
-    // //Load the Page Table
-    // asm("mov %0, %%cr3" : : "r" (Paging::__PAGING__PTM_GLOBAL.PML4));
-
-    // ProcessSwitch((void*)(&cpu->currentProcess->GetContext()), (void*)(&Previous->GetContext()));
+    //Swap the process (Paging causes errors when being swapped)
+    ProcessSwitch(&(cpu->currentProcess->Context), (uint64_t)(Paging::__PAGING__PTM_GLOBAL.PML4));
 }
 
 Processes::Process* Scheduler::NewProcess(const char* Name, uint64_t entry, uint64_t data){
     Process* p = new Process(NextPID++);
 
-    Memory::memcpy(&p->Name, Name, 16);
+    Memory::memcpy(&p->Name, Name, strlen(Name));
 
     p->ContextCreation((uint64_t)entry, data);
 
@@ -187,7 +167,7 @@ Processes::Process* Scheduler::NewProcess(const char* Name, uint64_t entry, uint
             break;
         }
     }
-
+    
     acquireLock(&cpu->QueueLock);
     asm("cli");
     cpu->Queue->add_back(p);
@@ -205,7 +185,7 @@ void Scheduler::HandleInterrupt(uint64_t rsp){
 Process* Scheduler::CreateIdleProcess(const char* Name){
     Process* p = new Process(NextPID++);
 
-    Memory::memcpy(&p->Name, Name, 16);
+    Memory::memcpy(&p->Name, Name, strlen(Name));
 
     p->IdleContextCreation((uint64_t)IdleProcess, 0);
 

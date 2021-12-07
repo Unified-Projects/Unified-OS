@@ -582,7 +582,7 @@ GeneralDirectory Fat32Partition::ResolveDir(const char* Path){
     //Create the directory
     GeneralDirectory Directory = {};
 
-
+    
 
     //return
     return Directory;

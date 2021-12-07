@@ -138,5 +138,27 @@ bool VolumeManager::MountPartition(PartitionDevice* partition, uint8_t MPoint = 
     return false;
 }
 
+//Reading from the disk
+GeneralFile VolumeManager::ResolveFile(const char* Path){
+    //Validate Mountpoint
+    if(Path[0] - 0x41 < 0x1A){
+        if(Partitions[Path[0] - 0x41]){ //Return the Resolved File
+            return Partitions[Path[0] - 0x41]->ResolveFile(Path);
+        }
+    }
+
+    return GeneralFile{};
+}
+GeneralDirectory VolumeManager::ResolveDir(const char* Path){
+    //Validate Mountpoint
+    if(Path[0] - 0x41 < 0x1A){
+        if(Partitions[Path[0]]){ //Return the Resolve Directory
+            return Partitions[Path[0]]->ResolveDir(Path);
+        }
+    }
+
+    return GeneralDirectory{};
+}
+
 //Global Manager
 VolumeManager* FileSystem::__FS_VOLUME_MANAGER__ = new VolumeManager();

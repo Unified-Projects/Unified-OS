@@ -4,7 +4,7 @@
 #include <common/stdint.h>
 #include <interrupts/interrupts.h>
 
-#define SYSCALL_COUNT 3
+#define SYSCALL_COUNT 999
 
 namespace UnifiedOS{
     namespace Interrupts{

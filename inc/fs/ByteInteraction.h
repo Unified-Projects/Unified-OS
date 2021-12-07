@@ -3,6 +3,8 @@
 
 #include <common/stdint.h>
 
+#define offsetBuffer(Buffer, bytes_to_skip) (Buffer += bytes_to_skip)
+
 namespace UnifiedOS{
     namespace FileSystem{
         namespace Endian{
@@ -18,8 +20,6 @@ namespace UnifiedOS{
         }
 
         namespace Byte{
-            #define offsetBuffer(Buffer, bytes_to_skip) (Buffer += bytes_to_skip)
-
             //Definitions
             uint8_t GetByte(void* Buffer, uint64_t start);
             uint16_t Get2Byte(void* Buffer, uint64_t start);

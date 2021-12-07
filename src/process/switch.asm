@@ -24,7 +24,7 @@ ProcessSwitch:
     mov rax, rsi ; PML4
     popaq ; Load register context (we don't load RAX yet)
 
-    mov cr3, rax ; Set CR3
+    ; mov cr3, rax ; Set CR3
 
     pop rax ; Now pop RAX
     iretq ; This will pop RIP, CS, RFLAGS, RSP and SS.

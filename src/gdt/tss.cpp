@@ -31,9 +31,9 @@ void GlobalDescriptorTable::InitTSS(TSS* tss, GDTDescriptor* gdt){
     tss->Ist2 = (uint64_t)__PAGING__PFA_GLOBAL.RequestPages(8);
     tss->Ist3 = (uint64_t)__PAGING__PFA_GLOBAL.RequestPages(8);
 
-    memset((void*)tss->Ist1, 0, 0x1000);
-    memset((void*)tss->Ist2, 0, 0x1000);
-    memset((void*)tss->Ist3, 0, 0x1000);
+    memset((void*)tss->Ist1, 0, 0x1000 * 8);
+    memset((void*)tss->Ist2, 0, 0x1000 * 8);
+    memset((void*)tss->Ist3, 0, 0x1000 * 8);
 
     tss->Ist1 += 0x1000 * 8;
     tss->Ist2 += 0x1000 * 8;

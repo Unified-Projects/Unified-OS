@@ -32,7 +32,7 @@ namespace UnifiedOS{
             uint8_t High;
             uint32_t High32;
             uint32_t Reserved;
-        };
+        }__attribute__((packed));
         
 
         //Global Descriptor Table

@@ -43,23 +43,28 @@ Process* Process::ContextCreation(uint64_t entry, int64_t data){
 
     //Timing
     ActiveTicks = 0;
-    TimeSlice = DefaultTimeSlice;
+    TimeSlice = DEFAUL_PROCESS_TICK_COUNT;
+    DefaultTimeSlice = DEFAUL_PROCESS_TICK_COUNT;
+
+    //FXState creation
+    fx_State = Paging::__PAGING__PFA_GLOBAL.RequestPage(); // Allocate Memory for the FPU/Extended Register State
+    memset(fx_State, 0x00, sizeof(fx_State));
 
     //FXState
-    fx_State->mxcsr = 0x1f80; // Default MXCSR (SSE Control Word) State
-    fx_State->mxcsrMask = 0xffbf;
-    fx_State->fcw = 0x33f; // Default FPU Control Word State
+    ((FXState*)fx_State)->mxcsr = 0x1f80; // Default MXCSR (SSE Control Word) State
+    ((FXState*)fx_State)->mxcsrMask = 0xffbf;
+    ((FXState*)fx_State)->fcw = 0x33f; // Default FPU Control Word State
 
     return this;
 }
 
 Process* Process::IdleContextCreation(uint64_t entry, int64_t data){
-    //Request a small stack as the task is a idle task
-    const size_t StackSize = DefaultStackBytes;
-    Stack = (uint8_t*)Paging::__PAGING__PFA_GLOBAL.RequestPage();
+    //Request a large stack
+    const size_t StackSize = DefaultStackBytes * 32;
+    Stack = (uint8_t*)Paging::__PAGING__PFA_GLOBAL.RequestPages(32);
 
     //Set it to zero
-    memset(Stack, 0, DefaultStackBytes);
+    memset(Stack, 0, DefaultStackBytes * 32);
 
     //We offset the stack
     uint64_t StackEnd = reinterpret_cast<uint64_t>(Stack) + StackSize;
@@ -83,12 +88,17 @@ Process* Process::IdleContextCreation(uint64_t entry, int64_t data){
 
     //Timing
     ActiveTicks = 0;
-    TimeSlice = DefaultTimeSlice;
+    TimeSlice = 0;
+    DefaultTimeSlice = 0;
+
+    //FXState creation
+    fx_State = Paging::__PAGING__PFA_GLOBAL.RequestPage(); // Allocate Memory for the FPU/Extended Register State
+    memset(fx_State, 0x00, sizeof(fx_State));
 
     //FXState
-    fx_State->mxcsr = 0x1f80; // Default MXCSR (SSE Control Word) State
-    fx_State->mxcsrMask = 0xffbf;
-    fx_State->fcw = 0x33f; // Default FPU Control Word State
+    ((FXState*)fx_State)->mxcsr = 0x1F80; // Default MXCSR (SSE Control Word) State
+    ((FXState*)fx_State)->mxcsrMask = 0xFFbF;
+    ((FXState*)fx_State)->fcw = 0x33F; // Default FPU Control Word State
 
     return this;
 }
