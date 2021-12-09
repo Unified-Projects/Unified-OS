@@ -1,11 +1,10 @@
 # Unified-OS 64-Bit
+## **Real Hardware Currently Not Supported**
+
 A Custom Operating System
 
 ## What now:
- - Other Filesystems
- - IPC
- - Daemon
- - Services
+ - Multiprocessing fixes and finishing
 
 ## Notes:
  - System requires UEFI and APIC/ACPI support
