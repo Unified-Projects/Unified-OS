@@ -3,17 +3,21 @@
 ## Processing:
 
 ### **Threads**
- - [ ] Threads (Multiple threads)
- - [ ] Separate Stack
- - [ ] States
+ - [x] Threads (Multiple threads)
+ - [x] Separate Stack
+ - [x] States
  - [ ] Blocker
+ - [ ] User Space Stack
 
 ### **All**
  - [ ] Task killing (Remove Stack Etc)
- - [ ] Task Yeilding (Premature Switches)
- - [ ] Task Forking (Cloning)
+ - [x] Task Yeilding (Premature Switches)
+ - [x] Task Forking (Cloning)
  - [ ] Blocking - Sleeping [OSDev](https://wiki.osdev.org/Blocking_Process)
  - [ ] Context creation from a elf (Executable)
+ - [x] Switch to lists
+ - [ ] Comtains its own PageMap (Needs to be properly setup and fixed in task switching)
+ - [ ] Switch to refPtrs for better queing and memory mapping
 
 ## Interprocess Communication
 
@@ -39,3 +43,29 @@
 
 ### **Services**
  - [ ] A named interface that can be interacted with
+
+## Interrupts
+
+### **Halt**
+ - [x] Dissable Interrupts
+ - [x] Hlt the cpu
+ - [x] Used for kernel Panics
+ - [x] Send over IPI to other CPUs
+ - [x] Assert embedded into Vectors
+
+### **Timer**
+ - [x] Callbacks
+ - [ ] Optimised to use the Thread Blocker Method
+ - [x] Microseconds
+ - [x] Tick down
+
+## FileSystem
+
+### **Blocker**
+ - [ ] Lock Read/Write when currently being read from (Blocking the thread) (**Disk**)
+ - [ ] Assert for invalid inputs
+
+# Once all done I will move refresh this list
+
+## What is needed
+I need to (pretty much) delete all my scheduling code and process stuff. Replace it with threads build in signals and handlers for IPC
